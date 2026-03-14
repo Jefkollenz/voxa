@@ -19,7 +19,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
   const [{ data: profile }, { data: questions }, platformSettings] = await Promise.all([
     supabaseAdmin
       .from('profiles')
-      .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, created_at, custom_creator_rate, custom_deadline_hours')
+      .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, created_at')
       .eq('id', params.id)
       .single(),
     supabaseAdmin
@@ -32,9 +32,26 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
 
   if (!profile) notFound()
 
+  // Fetch new columns separately — graceful fallback if migration hasn't run yet
+  let customCreatorRate: number | null = null
+  let customDeadlineHours: number | null = null
+  try {
+    const { data: overrides } = await supabaseAdmin
+      .from('profiles')
+      .select('custom_creator_rate, custom_deadline_hours')
+      .eq('id', params.id)
+      .single()
+    if (overrides) {
+      customCreatorRate = overrides.custom_creator_rate ?? null
+      customDeadlineHours = overrides.custom_deadline_hours ?? null
+    }
+  } catch {
+    // Migration not yet applied — form will default to platform settings
+  }
+
   const qs = questions ?? []
 
-  const creatorRate = effectiveCreatorRate(platformSettings, profile.custom_creator_rate)
+  const creatorRate = effectiveCreatorRate(platformSettings, customCreatorRate)
   const platformFeeRate = 1 - creatorRate
 
   const totalGross = qs
@@ -104,7 +121,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
             Líquido do Criador
-            {profile.custom_creator_rate !== null && (
+            {customCreatorRate !== null && (
               <span className="ml-1 text-purple-600">(individual)</span>
             )}
           </p>
@@ -129,8 +146,8 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
       <CreatorParamsForm
         creatorId={profile.id}
         username={profile.username}
-        customCreatorRate={profile.custom_creator_rate ?? null}
-        customDeadlineHours={profile.custom_deadline_hours ?? null}
+        customCreatorRate={customCreatorRate}
+        customDeadlineHours={customDeadlineHours}
         platformSettings={platformSettings}
       />
 
