@@ -22,6 +22,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
   const [serviceType, setServiceType] = useState<'base' | 'premium'>('base')
   const [amount, setAmount] = useState(baseMin)
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [isShareable, setIsShareable] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -61,6 +62,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
           username,
           question: question.trim(),
           name: isAnonymous ? 'Anônimo' : name.trim() || 'Anônimo',
+          email: email.trim(),
           amount,
           serviceType,
           isAnonymous,
@@ -126,6 +128,19 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
             className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-[#DD2A7B] outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-500"
             placeholder="Joãozinho"
           />
+        </div>
+
+        {/* Email */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Seu E-mail (opcional)</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-[#DD2A7B] outline-none transition-all placeholder-gray-500"
+            placeholder="para@exemplo.com"
+          />
+          <p className="text-xs text-gray-600 mt-1">Usado apenas para segurança do pagamento. Não será exibido.</p>
         </div>
 
         {/* Opções */}

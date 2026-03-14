@@ -19,7 +19,7 @@ const VALID_SERVICE_TYPES = ['base', 'premium'] as const
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { username, question, name, amount, serviceType, isAnonymous, isShareable } = body
+    const { username, question, name, email, amount, serviceType, isAnonymous, isShareable } = body
 
     if (!username || !question || !amount) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     // Sanitizar e validar entradas
     const sanitizedQuestion = String(question).trim().slice(0, 1000)
     const sanitizedName = String(name || '').trim().slice(0, 100)
+    const sanitizedEmail = String(email || '').trim().slice(0, 254)
     const sanitizedServiceType: 'base' | 'premium' = VALID_SERVICE_TYPES.includes(serviceType) ? serviceType : 'base'
     const sanitizedAmount = Number(amount)
 
@@ -100,11 +101,18 @@ export async function POST(request: Request) {
             id: externalRef,
             title: `Pergunta para @${username} (${sanitizedServiceType === 'premium' ? 'Vídeo' : 'Base'})`,
             description: sanitizedQuestion.slice(0, 256),
+            category_id: 'services',
             quantity: 1,
             unit_price: total,
             currency_id: 'BRL',
           },
         ],
+        payer: {
+          name: sanitizedName || 'Anônimo',
+          surname: '',
+          ...(sanitizedEmail && { email: sanitizedEmail }),
+        },
+        statement_descriptor: 'VOXA',
         back_urls: {
           success: `${appUrl}/perfil/${username}?payment_status=approved&ref=${externalRef}`,
           failure: `${appUrl}/perfil/${username}?payment_status=failure&ref=${externalRef}`,
