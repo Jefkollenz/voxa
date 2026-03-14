@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const paymentId = body?.data?.id ?? body?.id
     const type = body?.type ?? body?.topic
 
-    if (!paymentId || (type !== 'payment' && type !== 'merchant_order')) {
+    if (!paymentId || type !== 'payment') {
       return NextResponse.json({ received: true })
     }
 
@@ -147,7 +147,9 @@ export async function POST(request: Request) {
     })
 
     if (transactionError) {
-      // Não deletar o payment_intent — manter para diagnóstico e possível reprocessamento
+      // Rollback: deletar a question para manter consistência (sem question órfã sem transaction)
+      // O payment_intent é mantido para que o MP possa re-entregar o webhook e reprocessar
+      await supabaseAdmin.from('questions').delete().eq('id', question.id)
       console.error('[webhook] Erro ao inserir transaction:', transactionError)
       return NextResponse.json({ error: 'Erro ao salvar transação' }, { status: 500 })
     }

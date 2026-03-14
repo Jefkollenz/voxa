@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import MercadoPagoConfig, { Preference } from 'mercadopago'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { PLATFORM_FEE_RATE } from '@/lib/constants'
 
 const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Valor mínimo é R$ ${minPrice}` }, { status: 422 })
     }
 
-    const total = Number((sanitizedAmount * 1.1).toFixed(2))
+    const total = Number((sanitizedAmount * (1 + PLATFORM_FEE_RATE)).toFixed(2))
     const externalRef = randomUUID()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
         ],
         back_urls: {
           success: `${appUrl}/perfil/${username}?payment_status=approved&ref=${externalRef}`,
-          failure: `${appUrl}/perfil/${username}?payment_status=failure`,
+          failure: `${appUrl}/perfil/${username}?payment_status=failure&ref=${externalRef}`,
           pending: `${appUrl}/perfil/${username}?payment_status=pending&ref=${externalRef}`,
         },
         auto_return: 'approved',
