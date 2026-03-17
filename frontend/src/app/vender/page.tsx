@@ -216,10 +216,10 @@ export default function VenderPage() {
               <TrendingUp className="w-10 h-10 text-green-400 mx-auto mb-4" />
               <p className="text-gray-400 text-sm mb-2 font-medium">Ganho Estimado / Mês</p>
               <p className="text-4xl lg:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-br from-green-400 to-emerald-600 mb-2">
-                R$ {monthlyEarnings.toLocaleString('pt-BR')}
+                R$ {monthlyEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-gray-500 mt-4 pt-4 border-t border-white/5">
-                Já descontando nossa taxa justa de 10% (Você recebe R$ {netEarnings.toLocaleString('pt-BR')}).
+                Já descontando nossa taxa justa de 10% (Você recebe R$ {netEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).
               </p>
             </div>
 

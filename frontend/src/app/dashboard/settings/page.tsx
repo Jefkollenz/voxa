@@ -1,13 +1,32 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { CREATOR_NET_RATE } from '@/lib/constants'
 
+type FastAskSuggestion = {
+  label: string
+  question: string
+  amount: number
+}
+
+const DEFAULT_SUGGESTIONS: FastAskSuggestion[] = [
+  { label: '⚡ Dica rápida', question: 'Qual é a sua dica mais valiosa que você daria para alguém começando agora?', amount: 20 },
+  { label: '🎨 Análise de perfil', question: 'Você pode analisar meu perfil e me dar um feedback honesto sobre o meu estilo?', amount: 35 },
+  { label: '🌟 Recomendação', question: 'Qual é a sua recomendação exclusiva para quem quer se destacar nessa área?', amount: 15 },
+]
+
 export default function SettingsPage() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const msgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showSuccess = useCallback((msg: string, duration = 3000) => {
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current)
+    setSuccessMessage(msg)
+    msgTimerRef.current = setTimeout(() => setSuccessMessage(''), duration)
+  }, [])
 
   const [bio, setBio] = useState('')
   const [minPrice, setMinPrice] = useState(10)
@@ -21,6 +40,9 @@ export default function SettingsPage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
 
+  // Fast Ask
+  const [suggestions, setSuggestions] = useState<FastAskSuggestion[]>(DEFAULT_SUGGESTIONS)
+
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
@@ -29,7 +51,7 @@ export default function SettingsPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url, min_price, daily_limit')
+        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions')
         .eq('id', user.id)
         .single()
 
@@ -41,6 +63,14 @@ export default function SettingsPage() {
       setMinPrice(profile.min_price ?? 10)
       setDailyLimit(profile.daily_limit ?? 10)
       setAvatarUrl(profile.avatar_url ?? '')
+
+      // BUG FIX: fast_ask_suggestions pode vir null do Supabase antes da migration
+      // Array.isArray garante que não quebra se a coluna ainda não existir
+      const saved = profile.fast_ask_suggestions
+      if (Array.isArray(saved) && saved.length > 0) {
+        setSuggestions(saved)
+      }
+
       setIsLoading(false)
     }
     load()
@@ -83,17 +113,42 @@ export default function SettingsPage() {
     const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(data.path)
     setAvatarUrl(publicUrl)
     setIsUploading(false)
-    setSuccessMessage('Avatar atualizado com sucesso!')
-    setTimeout(() => setSuccessMessage(''), 3000)
+    showSuccess('Avatar atualizado com sucesso!')
 
-    // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Fast Ask handlers
+  const updateSuggestion = (index: number, field: keyof FastAskSuggestion, value: string | number) => {
+    setSuggestions(prev => prev.map((s, i) => {
+      if (i !== index) return s
+      if (field === 'amount') {
+        // BUG FIX: garante que amount é sempre número válido, nunca NaN
+        const parsed = parseFloat(String(value))
+        return { ...s, amount: isNaN(parsed) ? s.amount : Math.max(1, parsed) }
+      }
+      return { ...s, [field]: value }
+    }))
+  }
+
+  const addSuggestion = () => {
+    if (suggestions.length >= 5) return
+    setSuggestions(prev => [...prev, { label: '✨ Nova sugestão', question: '', amount: minPrice }])
+  }
+
+  const removeSuggestion = (index: number) => {
+    setSuggestions(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSave = async () => {
     setIsSaving(true)
     setError('')
     setSuccessMessage('')
+
+    // BUG FIX: filtra sugestões inválidas antes de salvar — evita dados corrompidos no banco
+    const validSuggestions = suggestions.filter(
+      s => s.label?.trim() && s.question?.trim() && Number(s.amount) > 0
+    )
 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -106,15 +161,35 @@ export default function SettingsPage() {
         min_price: minPrice,
         daily_limit: dailyLimit,
         avatar_url: avatarUrl || null,
+        fast_ask_suggestions: validSuggestions,
       })
       .eq('id', user.id)
 
     setIsSaving(false)
     if (updateError) {
-      setError('Erro ao salvar. Tente novamente.')
+      // BUG FIX: se a coluna fast_ask_suggestions ainda não existe (migration pendente),
+      // tenta salvar sem ela para não bloquear o usuário
+      if (updateError.message?.includes('fast_ask_suggestions')) {
+        const { error: fallbackError } = await supabase
+          .from('profiles')
+          .update({
+            bio: bio.trim().slice(0, 200) || null,
+            min_price: minPrice,
+            daily_limit: dailyLimit,
+            avatar_url: avatarUrl || null,
+          })
+          .eq('id', user.id)
+
+        if (fallbackError) {
+          setError('Erro ao salvar. Tente novamente.')
+        } else {
+          showSuccess('Configurações salvas! (Perguntas rápidas disponíveis após atualização do banco)', 5000)
+        }
+      } else {
+        setError('Erro ao salvar. Tente novamente.')
+      }
     } else {
-      setSuccessMessage('Configurações salvas com sucesso!')
-      setTimeout(() => setSuccessMessage(''), 3000)
+      showSuccess('Configurações salvas com sucesso!')
     }
   }
 
@@ -134,24 +209,12 @@ export default function SettingsPage() {
           </div>
         </header>
         <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-4" />
-            <div className="flex items-start gap-4">
-              <div className="w-20 h-20 rounded-full bg-gray-200 animate-pulse shrink-0" />
-              <div className="flex-1 space-y-3">
-                <div className="h-9 w-32 bg-gray-200 rounded-xl animate-pulse" />
-                <div className="h-3 w-44 bg-gray-100 rounded animate-pulse" />
-              </div>
-            </div>
-          </div>
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-2" />
-              <div className="h-4 w-64 bg-gray-100 rounded animate-pulse mb-4" />
+              <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-4" />
               <div className="h-10 w-full bg-gray-100 rounded-xl animate-pulse" />
             </div>
           ))}
-          <div className="h-14 w-full bg-gray-200 rounded-2xl animate-pulse" />
         </main>
       </div>
     )
@@ -174,6 +237,7 @@ export default function SettingsPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
         {/* Avatar */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-bold text-lg mb-4">Foto de perfil</h2>
@@ -197,7 +261,6 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
-
             <div className="flex-1 space-y-3">
               <input
                 ref={fileInputRef}
@@ -283,6 +346,107 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        {/* ── FAST ASK ── */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="font-bold text-lg">Perguntas Rápidas</h2>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">
+              {suggestions.length}/5
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 mb-5">
+            Aparecem como pílulas clicáveis no seu perfil — facilitam a vida do fã e aumentam conversão.
+          </p>
+
+          <div className="space-y-4">
+            {suggestions.map((s, index) => (
+              <div key={index} className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    Sugestão {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeSuggestion(index)}
+                    className="text-gray-300 hover:text-red-400 transition-colors"
+                    title="Remover sugestão"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Texto da pílula <span className="text-gray-400">(aparece no botão)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={s.label}
+                    onChange={e => updateSuggestion(index, 'label', e.target.value.slice(0, 30))}
+                    maxLength={30}
+                    placeholder="ex: ⚡ Dica rápida"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Pergunta completa <span className="text-gray-400">(preenche a textarea do fã)</span>
+                  </label>
+                  <textarea
+                    value={s.question}
+                    onChange={e => updateSuggestion(index, 'question', e.target.value.slice(0, 200))}
+                    maxLength={200}
+                    rows={2}
+                    placeholder="ex: Qual é a sua dica mais valiosa para quem está começando?"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#DD2A7B] resize-none"
+                  />
+                  <p className="text-right text-xs text-gray-400 mt-0.5">{s.question.length}/200</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Valor sugerido <span className="text-gray-400">(mínimo: R$ {minPrice})</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400">R$</span>
+                    <input
+                      type="number"
+                      value={s.amount}
+                      min={minPrice}
+                      max={500}
+                      onChange={e => updateSuggestion(index, 'amount', e.target.value)}
+                      className="w-28 border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
+                    />
+                    {/* Preview da pílula */}
+                    <div className="flex-1 flex justify-end">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-500 bg-white">
+                        {s.label || '...'}
+                        <span className="text-gray-400">· R$ {Math.max(Number(s.amount) || minPrice, minPrice)}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {suggestions.length < 5 && (
+            <button
+              type="button"
+              onClick={addSuggestion}
+              className="mt-4 w-full border-2 border-dashed border-gray-200 rounded-2xl py-3 text-sm text-gray-400 font-medium hover:border-[#DD2A7B] hover:text-[#DD2A7B] transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Adicionar sugestão
+            </button>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
         {successMessage && (
@@ -292,6 +456,7 @@ export default function SettingsPage() {
         )}
 
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSaving || isUploading}
           className="w-full bg-gradient-instagram text-white font-bold py-4 rounded-2xl disabled:opacity-50 text-base"

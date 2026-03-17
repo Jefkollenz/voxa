@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, Heart } from 'lucide-react'
 import { PLATFORM_FEE_RATE, RESPONSE_DEADLINE_HOURS } from '@/lib/constants'
@@ -50,6 +50,17 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [activeSuggestion, setActiveSuggestion] = useState<number | null>(null)
+
+  // Avisa o usuário ao sair da página com dados preenchidos
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (question.trim() || supportMessage.trim()) {
+        e.preventDefault()
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [question, supportMessage])
 
   // Filtra sugestões inválidas e remove as que teriam o valor forçado acima do dobro do original
   // (evita UX confusa como "Dica rápida · R$ 50" quando o original era R$ 15)
