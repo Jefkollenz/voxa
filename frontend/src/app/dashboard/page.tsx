@@ -1,128 +1,439 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import QuestionList from './QuestionList'
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import { CREATOR_NET_RATE } from '@/lib/constants'
 
-type Question = {
-  id: string
-  sender_name: string
-  content: string
-  price_paid: number
-  service_type: string
-  is_shareable: boolean
-  is_anonymous: boolean
-  created_at: string
-  status: string
+type FastAskSuggestion = {
+  label: string
+  question: string
+  amount: number
 }
 
-export default async function DashboardPage() {
-  const supabase = createClient()
+const DEFAULT_SUGGESTIONS: FastAskSuggestion[] = [
+  { label: '⚡ Dica rápida', question: 'Qual é a sua dica mais valiosa que você daria para alguém começando agora?', amount: 20 },
+  { label: '🎨 Análise de perfil', question: 'Você pode analisar meu perfil e me dar um feedback honesto sobre o meu estilo?', amount: 35 },
+  { label: '🌟 Recomendação', question: 'Qual é a sua recomendação exclusiva para quem quer se destacar nessa área?', amount: 15 },
+]
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function SettingsPage() {
+  const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Buscar perfil do criador logado
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, username, avatar_url, daily_limit, questions_answered_today')
-    .eq('id', user.id)
-    .single()
+  const [bio, setBio] = useState('')
+  const [minPrice, setMinPrice] = useState(10)
+  const [dailyLimit, setDailyLimit] = useState(10)
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [username, setUsername] = useState('')
+  const [userId, setUserId] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
 
-  // Se não tem perfil ainda, redirecionar para setup
-  if (!profile) redirect('/setup')
+  // Fast Ask
+  const [suggestions, setSuggestions] = useState<FastAskSuggestion[]>(DEFAULT_SUGGESTIONS)
 
-  // Buscar perguntas pendentes, ordenadas por valor (maior primeiro)
-  const { data: questions } = await supabase
-    .from('questions')
-    .select('id, sender_name, content, price_paid, service_type, is_shareable, is_anonymous, created_at, status')
-    .eq('creator_id', profile.id)
-    .eq('status', 'pending')
-    .order('price_paid', { ascending: false })
-    .returns<Question[]>()
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
 
-  // Métricas reais
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions')
+        .eq('id', user.id)
+        .single()
 
-  const { data: todayAnswered } = await supabase
-    .from('questions')
-    .select('price_paid')
-    .eq('creator_id', profile.id)
-    .eq('status', 'answered')
-    .gte('answered_at', today.toISOString())
+      if (!profile) { router.push('/setup'); return }
 
-  const { count: totalAnswered } = await supabase
-    .from('questions')
-    .select('*', { count: 'exact', head: true })
-    .eq('creator_id', profile.id)
-    .eq('status', 'answered')
+      setUserId(user.id)
+      setUsername(profile.username)
+      setBio(profile.bio ?? '')
+      setMinPrice(profile.min_price ?? 10)
+      setDailyLimit(profile.daily_limit ?? 10)
+      setAvatarUrl(profile.avatar_url ?? '')
 
-  const earningsToday = (todayAnswered ?? []).reduce(
-    (sum, q) => sum + Number(q.price_paid) * CREATOR_NET_RATE,
-    0
-  )
+      // Carrega sugestões salvas ou usa as padrão
+      if (profile.fast_ask_suggestions && profile.fast_ask_suggestions.length > 0) {
+        setSuggestions(profile.fast_ask_suggestions)
+      }
 
-  const pendingCount = questions?.length ?? 0
-  const avatarUrl = profile.avatar_url ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
+      setIsLoading(false)
+    }
+    load()
+  }, [router])
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowed.includes(file.type)) {
+      setError('Formato inválido. Use JPG, PNG, WebP ou GIF.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Arquivo muito grande. Máximo 5 MB.')
+      return
+    }
+
+    setIsUploading(true)
+    setError('')
+
+    const supabase = createClient()
+    const extMap: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+    }
+    const ext = extMap[file.type] ?? 'jpg'
+    const path = `${userId}/${Date.now()}.${ext}`
+
+    const { data, error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (uploadError || !data) {
+      setError('Erro ao fazer upload. Tente novamente.')
+      setIsUploading(false)
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(data.path)
+    setAvatarUrl(publicUrl)
+    setIsUploading(false)
+    setSuccessMessage('Avatar atualizado com sucesso!')
+    setTimeout(() => setSuccessMessage(''), 3000)
+
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Fast Ask handlers
+  const updateSuggestion = (index: number, field: keyof FastAskSuggestion, value: string | number) => {
+    setSuggestions(prev => prev.map((s, i) =>
+      i === index ? { ...s, [field]: value } : s
+    ))
+  }
+
+  const addSuggestion = () => {
+    if (suggestions.length >= 5) return
+    setSuggestions(prev => [...prev, { label: '✨ Nova sugestão', question: '', amount: minPrice }])
+  }
+
+  const removeSuggestion = (index: number) => {
+    setSuggestions(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    setError('')
+    setSuccessMessage('')
+
+    // Valida sugestões antes de salvar
+    const validSuggestions = suggestions.filter(s => s.label.trim() && s.question.trim() && s.amount > 0)
+
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        bio: bio.trim().slice(0, 200) || null,
+        min_price: minPrice,
+        daily_limit: dailyLimit,
+        avatar_url: avatarUrl || null,
+        fast_ask_suggestions: validSuggestions,
+      })
+      .eq('id', user.id)
+
+    setIsSaving(false)
+    if (updateError) {
+      setError('Erro ao salvar. Tente novamente.')
+    } else {
+      setSuccessMessage('Configurações salvas com sucesso!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    }
+  }
+
+  const previewAvatar = avatarUrl.trim() || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+  const netMonthly = minPrice * dailyLimit * 30 * CREATOR_NET_RATE
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+              <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
+            </div>
+            <div className="h-4 w-24 bg-gray-100 rounded animate-pulse" />
+          </div>
+        </header>
+        <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-4" />
+              <div className="h-10 w-full bg-gray-100 rounded-xl animate-pulse" />
+            </div>
+          ))}
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="font-bold text-xl text-gradient-instagram">VOXA</h1>
+        <div className="max-w-2xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <a href="/dashboard/history" className="text-sm text-gray-500 hover:text-gray-800 transition-colors hidden sm:block">Histórico</a>
-            <a href="/dashboard/settings" className="text-sm text-gray-500 hover:text-gray-800 transition-colors hidden sm:block">Configurações</a>
-            <a href={`/perfil/${profile.username}`} className="text-sm text-gray-500 hover:text-gray-800 transition-colors hidden sm:block">@{profile.username}</a>
-            <div className="w-10 h-10 rounded-full bg-gradient-instagram p-[2px]">
-              <div className="w-full h-full rounded-full bg-white overflow-hidden">
-                <img src={avatarUrl} alt={profile.username} className="object-cover w-full h-full" />
-              </div>
-            </div>
+            <a href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </a>
+            <h1 className="font-bold text-xl text-gradient-instagram">VOXA</h1>
           </div>
+          <span className="text-sm text-gray-500">Configurações</span>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {/* Saudação */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F56040] rounded-3xl text-white shadow-md relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-          <h2 className="text-3xl font-bold mb-2 relative z-10">Olá, @{profile.username}! 👋</h2>
-          <p className="text-lg opacity-90 relative z-10">
-            {pendingCount > 0
-              ? `Você tem ${pendingCount} pergunta${pendingCount > 1 ? 's' : ''} pendente${pendingCount > 1 ? 's' : ''} aguardando resposta.`
-              : 'Nenhuma pergunta pendente no momento. Compartilhe seu perfil para receber mais!'}
+      <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+
+        {/* Avatar */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-lg mb-4">Foto de perfil</h2>
+          <div className="flex items-start gap-4">
+            <div className="relative shrink-0">
+              <img
+                src={previewAvatar}
+                alt="Avatar"
+                className="w-20 h-20 rounded-full object-cover border-2 border-gray-100"
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement
+                  el.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+                }}
+              />
+              {isUploading && (
+                <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div className="flex-1 space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="avatar-upload"
+              />
+              <label
+                htmlFor="avatar-upload"
+                className={`inline-flex items-center gap-2 cursor-pointer bg-gradient-instagram text-white text-sm font-semibold px-4 py-2 rounded-xl transition-opacity ${isUploading || isLoading ? 'opacity-50 pointer-events-none' : 'hover:opacity-90'}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {isUploading ? 'Enviando...' : 'Fazer upload'}
+              </label>
+              <p className="text-xs text-gray-400">JPG, PNG, WebP ou GIF — máx. 5 MB</p>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={() => setAvatarUrl('')}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Remover foto (usar avatar gerado)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bio */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-lg mb-4">Bio</h2>
+          <textarea
+            value={bio}
+            onChange={e => setBio(e.target.value)}
+            placeholder="Conte um pouco sobre você e o que você responde..."
+            rows={3}
+            maxLength={200}
+            className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#DD2A7B] resize-none"
+          />
+          <p className="text-right text-xs text-gray-400 mt-1">{bio.length}/200</p>
+        </div>
+
+        {/* Preço mínimo */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-lg mb-1">Preço mínimo por pergunta</h2>
+          <p className="text-sm text-gray-500 mb-4">Fãs precisam pagar pelo menos este valor para enviar uma pergunta.</p>
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-bold text-[#DD2A7B]">R$ {minPrice}</span>
+            <input
+              type="range"
+              min={5}
+              max={100}
+              step={5}
+              value={minPrice}
+              onChange={e => setMinPrice(Number(e.target.value))}
+              className="flex-1 accent-[#DD2A7B]"
+            />
+          </div>
+        </div>
+
+        {/* Limite diário */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-lg mb-1">Limite diário de perguntas</h2>
+          <p className="text-sm text-gray-500 mb-4">Máximo de perguntas que você aceita responder por dia.</p>
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-bold">{dailyLimit} <span className="text-base text-gray-400 font-normal">perguntas/dia</span></span>
+            <input
+              type="range"
+              min={1}
+              max={50}
+              step={1}
+              value={dailyLimit}
+              onChange={e => setDailyLimit(Number(e.target.value))}
+              className="flex-1 accent-[#DD2A7B]"
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-3">
+            Potencial mensal (líquido): <span className="font-bold text-green-600">R$ {netMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
         </div>
 
-        {/* Métricas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500 font-medium mb-1">Ganhos Hoje (líquido)</p>
-            <p className="text-3xl font-bold text-green-600">
-              R$ {earningsToday.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+        {/* ── FAST ASK ── */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="font-bold text-lg">Perguntas Rápidas</h2>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">
+              {suggestions.length}/5
+            </span>
           </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500 font-medium mb-1">Respondidas Hoje</p>
-            <p className="text-3xl font-bold">
-              {profile.questions_answered_today}
-              <span className="text-base text-gray-400 font-normal">/{profile.daily_limit}</span>
-            </p>
+          <p className="text-sm text-gray-500 mb-5">
+            Aparecem como pílulas clicáveis no seu perfil — facilitam a vida do fã e aumentam conversão.
+          </p>
+
+          <div className="space-y-4">
+            {suggestions.map((s, index) => (
+              <div key={index} className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    Sugestão {index + 1}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeSuggestion(index)}
+                    className="text-gray-300 hover:text-red-400 transition-colors"
+                    title="Remover sugestão"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Label da pílula */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Texto da pílula <span className="text-gray-400">(aparece no botão)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={s.label}
+                    onChange={e => updateSuggestion(index, 'label', e.target.value.slice(0, 30))}
+                    maxLength={30}
+                    placeholder="ex: ⚡ Dica rápida"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
+                  />
+                </div>
+
+                {/* Pergunta completa */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Pergunta completa <span className="text-gray-400">(preenche a textarea do fã)</span>
+                  </label>
+                  <textarea
+                    value={s.question}
+                    onChange={e => updateSuggestion(index, 'question', e.target.value.slice(0, 200))}
+                    maxLength={200}
+                    rows={2}
+                    placeholder="ex: Qual é a sua dica mais valiosa para quem está começando?"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#DD2A7B] resize-none"
+                  />
+                  <p className="text-right text-xs text-gray-400 mt-0.5">{s.question.length}/200</p>
+                </div>
+
+                {/* Valor sugerido */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    Valor sugerido <span className="text-gray-400">(mínimo: R$ {minPrice})</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400">R$</span>
+                    <input
+                      type="number"
+                      value={s.amount}
+                      min={minPrice}
+                      max={500}
+                      onChange={e => updateSuggestion(index, 'amount', Math.max(minPrice, Number(e.target.value)))}
+                      className="w-28 border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
+                    />
+                    {/* Preview da pílula */}
+                    <div className="flex-1 flex justify-end">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-500 bg-white">
+                        {s.label || '...'}
+                        <span className="text-gray-400">· R$ {Math.max(s.amount, minPrice)}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <p className="text-sm text-gray-500 font-medium mb-1">Total Respondido</p>
-            <p className="text-3xl font-bold text-[#DD2A7B]">{totalAnswered ?? 0}</p>
-          </div>
+
+          {suggestions.length < 5 && (
+            <button
+              type="button"
+              onClick={addSuggestion}
+              className="mt-4 w-full border-2 border-dashed border-gray-200 rounded-2xl py-3 text-sm text-gray-400 font-medium hover:border-[#DD2A7B] hover:text-[#DD2A7B] transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Adicionar sugestão
+            </button>
+          )}
         </div>
 
-        {/* Lista de perguntas (Client Component) */}
-        <QuestionList
-          questions={questions ?? []}
-          creatorUsername={profile.username}
-          creatorId={profile.id}
-        />
+        {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+
+        {successMessage && (
+          <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl text-center">
+            <p className="text-green-600 font-semibold text-sm">✓ {successMessage}</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={isSaving || isUploading}
+          className="w-full bg-gradient-instagram text-white font-bold py-4 rounded-2xl disabled:opacity-50 text-base"
+        >
+          {isSaving ? 'Salvando...' : 'Salvar alterações'}
+        </button>
+
+        <div className="text-center">
+          <a href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600">Voltar ao dashboard</a>
+        </div>
       </main>
     </div>
   )
