@@ -40,7 +40,7 @@ export async function sendResponseNotification({
         </p>
 
         <div style="text-align: center; margin-bottom: 32px;">
-          <a href="${appUrl}/fan/dashboard"
+          <a href="${appUrl}/perfil/${creatorUsername}"
              style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF); color: white; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 15px;">
             Ver resposta
           </a>

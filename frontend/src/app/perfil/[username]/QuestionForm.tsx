@@ -439,7 +439,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
             className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-[#DD2A7B] outline-none transition-all placeholder-gray-500"
             placeholder="para@exemplo.com"
           />
-          <p className="text-xs text-gray-600 mt-1">Usado apenas para segurança do pagamento. Não será exibido.</p>
+          <p className="text-xs text-gray-600 mt-1">Você receberá a resposta neste email.</p>
         </div>
 
         {/* Opções */}

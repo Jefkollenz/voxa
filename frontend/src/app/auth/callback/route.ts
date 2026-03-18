@@ -20,27 +20,17 @@ export async function GET(request: Request) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        // Verificar se é criador e/ou fã
-        const [{ data: profile }, { data: fanProfile }] = await Promise.all([
-          supabase.from('profiles').select('id').eq('id', user.id).single(),
-          supabase.from('fan_profiles').select('id').eq('id', user.id).single(),
-        ])
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .single()
 
-        const isCreator = !!profile
-        const isFan = !!fanProfile
-
-        if (isCreator && isFan) {
-          return NextResponse.redirect(`${origin}/select-role`)
-        }
-        if (isCreator) {
+        if (profile) {
           return NextResponse.redirect(`${origin}/dashboard`)
         }
-        if (isFan) {
-          return NextResponse.redirect(`${origin}/fan/dashboard`)
-        }
 
-        // Nenhum perfil — redirecionar para escolha de papel
-        return NextResponse.redirect(`${origin}/select-role`)
+        return NextResponse.redirect(`${origin}/setup`)
       }
     }
   }
