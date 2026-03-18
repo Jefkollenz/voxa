@@ -232,11 +232,10 @@ export default async function PerfilPage({
     supabase
       .from('creator_stats')
       .select('*')
-      .eq('creator_id', profile.id)
-      .single<CreatorStats>(),
+      .eq('creator_id', profile.id),
   ])
 
-  const milestones = computeMilestones(statsData ?? null)
+  const milestones = computeMilestones(statsData?.[0] ?? null)
   const questionsLeft = Math.max(0, profile.daily_limit - profile.questions_answered_today)
   const avatarUrl = profile.avatar_url ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
   const displayName = `@${profile.username}`

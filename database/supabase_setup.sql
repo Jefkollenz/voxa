@@ -208,6 +208,89 @@ CREATE INDEX IF NOT EXISTS idx_refund_queue_status ON refund_queue(status, creat
 ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS transactions_mp_payment_id_unique UNIQUE (mp_payment_id);
 
 -- ============================================================
+-- CORREÇÕES E MELHORIAS (POST-BETA)
+-- ============================================================
+
+-- Adicionar campos updated_at para audit trail
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
+-- Função para atualizar timestamp automaticamente
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers para atualizar updated_at
+CREATE TRIGGER IF NOT EXISTS trg_profiles_updated_at BEFORE UPDATE ON profiles
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER IF NOT EXISTS trg_questions_updated_at BEFORE UPDATE ON questions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER IF NOT EXISTS trg_transactions_updated_at BEFORE UPDATE ON transactions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
+-- CONSTRAINTS DE NEGÓCIO
+-- ============================================================
+
+-- Username: mínimo 3 caracteres, apenas letras/números/underscore/hífen
+ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS username_format
+  CHECK (LENGTH(username) >= 3 AND username ~ '^[a-z0-9_-]+$');
+
+-- Min price: mínimo R$ 1.00
+ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS min_price_positive
+  CHECK (min_price >= 1.00);
+
+-- Daily limit: entre 1 e 100
+ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS daily_limit_range
+  CHECK (daily_limit BETWEEN 1 AND 100);
+
+-- Price paid: sempre positivo
+ALTER TABLE questions ADD CONSTRAINT IF NOT EXISTS price_paid_positive
+  CHECK (price_paid > 0);
+
+-- ============================================================
+-- CLEANUP AUTOMÁTICO DE PAYMENT INTENTS EXPIRADAS
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION cleanup_stale_payment_intents()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM payment_intents
+  WHERE created_at < NOW() - INTERVAL '1 day';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- HABILITAR CRON JOBS (executar após criar extensão pg_cron)
+-- ============================================================
+
+-- Primeiro, habilitar extensão (uma vez):
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Então, agendar jobs:
+-- Reset diário às 03:00 UTC (meia-noite BRT = UTC-3)
+-- SELECT cron.schedule('reset-daily-counts', '0 3 * * *',
+--   $$SELECT reset_daily_question_counts()$$);
+
+-- Expirar perguntas antigas a cada 30 minutos
+-- SELECT cron.schedule('expire-questions', '*/30 * * * *',
+--   $$SELECT expire_pending_questions()$$);
+
+-- Limpar payment intents expiradas diariamente às 01:00 UTC
+-- SELECT cron.schedule('cleanup-payment-intents', '0 1 * * *',
+--   $$SELECT cleanup_stale_payment_intents()$$);
+
+-- Verificar agendamentos ativos:
+-- SELECT * FROM cron.job;
+
+-- ============================================================
 -- Função: incremento atômico do contador diário (chamada ao responder pergunta)
 -- Rodar no SQL Editor se ainda não existir:
 -- ============================================================

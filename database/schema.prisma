@@ -12,7 +12,7 @@ model Profile {
   username                 String          @unique
   bio                      String?
   avatar_url               String?
-  min_price                Float           @default(10.0)
+  min_price                Decimal         @default(10.00) @db.Decimal(10, 2)
   daily_limit              Int             @default(10)
   questions_answered_today Int             @default(0)
   referred_by_id           String?
@@ -23,6 +23,7 @@ model Profile {
   custom_deadline_hours    Int?
   fast_ask_suggestions     Json?
   created_at               DateTime        @default(now())
+  updated_at               DateTime        @updatedAt
   referred_by              Profile?        @relation("Referrals", fields: [referred_by_id], references: [id], onDelete: SetNull)
   referrals                Profile[]       @relation("Referrals")
   questions                Question[]
@@ -46,7 +47,7 @@ model Question {
   content            String
   media_url          String?
   status             QuestionStatus @default(pending)
-  price_paid         Float
+  price_paid         Decimal        @db.Decimal(10, 2)
   service_type       String         @default("base")
   is_anonymous       Boolean        @default(false)
   is_shareable       Boolean        @default(false)
@@ -54,6 +55,7 @@ model Question {
   response_audio_url String?
   answered_at        DateTime?
   created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
   transactions       Transaction[]
 
   @@map("questions")
@@ -63,12 +65,13 @@ model Transaction {
   id               String   @id @default(uuid())
   question_id      String
   question         Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
-  amount           Float
+  amount           Decimal  @db.Decimal(10, 2)
   status           String
   payment_method   String
   mp_payment_id    String?  @unique
   mp_preference_id String?
   created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   @@map("transactions")
 }
