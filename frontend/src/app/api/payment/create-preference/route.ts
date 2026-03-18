@@ -81,6 +81,7 @@ export async function POST(request: Request) {
         question_data: {
           creator_id: profile.id,
           sender_name: isAnonymous ? 'Anônimo' : (sanitizedName || 'Anônimo'),
+          sender_email: sanitizedEmail || null,
           content: sanitizedQuestion,
           price_paid: sanitizedAmount,
           service_type: sanitizedServiceType,

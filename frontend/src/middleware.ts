@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Rotas protegidas: exigem login
-  if ((pathname.startsWith('/dashboard') || pathname.startsWith('/setup')) && !user) {
+  if ((pathname.startsWith('/dashboard') || pathname.startsWith('/setup') || pathname.startsWith('/fan') || pathname.startsWith('/select-role')) && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -53,14 +53,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Se já está logado e tenta acessar /login, redireciona para /dashboard
+  // Se já está logado e tenta acessar /login, redireciona para /select-role
   if (pathname === '/login' && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/select-role', request.url))
   }
 
   return response
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*', '/fan/:path*', '/select-role'],
 }

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams, origin: defaultOrigin } = new URL(request.url)
   const code = searchParams.get('code')
-  
+
   // No Render, o request.url vem como localhost. Devemos forçar pela ENV do app original.
   const origin = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || defaultOrigin
 
@@ -20,18 +20,27 @@ export async function GET(request: Request) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user) {
-        // Verificar se o criador já tem perfil cadastrado
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .single()
+        // Verificar se é criador e/ou fã
+        const [{ data: profile }, { data: fanProfile }] = await Promise.all([
+          supabase.from('profiles').select('id').eq('id', user.id).single(),
+          supabase.from('fan_profiles').select('id').eq('id', user.id).single(),
+        ])
 
-        if (profile) {
-          return NextResponse.redirect(`${origin}/dashboard`)
-        } else {
-          return NextResponse.redirect(`${origin}/setup`)
+        const isCreator = !!profile
+        const isFan = !!fanProfile
+
+        if (isCreator && isFan) {
+          return NextResponse.redirect(`${origin}/select-role`)
         }
+        if (isCreator) {
+          return NextResponse.redirect(`${origin}/dashboard`)
+        }
+        if (isFan) {
+          return NextResponse.redirect(`${origin}/fan/dashboard`)
+        }
+
+        // Nenhum perfil — redirecionar para escolha de papel
+        return NextResponse.redirect(`${origin}/select-role`)
       }
     }
   }

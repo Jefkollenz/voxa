@@ -127,12 +127,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true })
     }
 
+    // Tentar vincular fan_id pelo email do comprador
+    let fanId: string | null = null
+    if (qd.sender_email) {
+      const { data: fanProfile } = await supabaseAdmin
+        .from('fan_profiles')
+        .select('id')
+        .eq('email', qd.sender_email)
+        .maybeSingle()
+      if (fanProfile) fanId = fanProfile.id
+    }
+
     // Inserir a pergunta no banco
     const { data: question, error: questionError } = await supabaseAdmin
       .from('questions')
       .insert({
         creator_id: qd.creator_id,
         sender_name: qd.sender_name,
+        sender_email: qd.sender_email ?? null,
+        fan_id: fanId,
         content: qd.content,
         price_paid: qd.price_paid,
         service_type: qd.service_type,

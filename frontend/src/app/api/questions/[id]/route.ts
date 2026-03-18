@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { sendResponseNotification } from '@/lib/email'
 
 export async function PATCH(
   request: Request,
@@ -16,7 +18,7 @@ export async function PATCH(
     // Verificar que a pergunta pertence ao criador logado
     const { data: question, error: fetchError } = await supabase
       .from('questions')
-      .select('id, creator_id, status')
+      .select('id, creator_id, status, sender_name, sender_email')
       .eq('id', params.id)
       .single()
 
@@ -67,8 +69,27 @@ export async function PATCH(
     const { error: rpcError } = await supabase.rpc('increment_answered_today', { profile_id: user.id })
     if (rpcError) {
       console.error('Erro ao incrementar contador diário:', rpcError)
-      // Não falha a resposta — a pergunta já foi respondida com sucesso,
-      // mas o contador pode ficar dessincronizado. Log para investigação.
+    }
+
+    // Notificar fã por email (fire-and-forget)
+    if (question.sender_email) {
+      const supabaseAdmin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      const { data: creatorProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single()
+
+      if (creatorProfile) {
+        sendResponseNotification({
+          fanEmail: question.sender_email,
+          fanName: question.sender_name ?? 'Fã',
+          creatorUsername: creatorProfile.username,
+        }).catch(err => console.error('[email] Erro ao notificar fã:', err))
+      }
     }
 
     return NextResponse.json({ success: true })
