@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import MercadoPagoConfig, { Payment } from 'mercadopago'
+import MercadoPagoConfig, { Payment, PaymentRefund } from 'mercadopago'
 import { createClient } from '@supabase/supabase-js'
 import { createHmac } from 'crypto'
 
@@ -128,11 +128,27 @@ export async function POST(request: Request) {
       .rpc('can_accept_question', { p_creator_id: qd.creator_id })
 
     if (!canAccept) {
-      // Limite atingido entre o momento do pagamento e a confirmação — será tratado como reembolso
-      console.warn('[webhook] Limite diário atingido para creator:', qd.creator_id, '— pagamento aprovado mas pergunta rejeitada')
-      // Manter o payment_intent para que o sistema de reembolso possa processar
+      // Limite atingido entre o momento do pagamento e a confirmação — reembolsar imediatamente
+      console.warn('[webhook] Limite diário atingido para creator:', qd.creator_id, '— iniciando reembolso automático para pagamento:', paymentId)
+      try {
+        const refundClient = new PaymentRefund(mp)
+        await refundClient.create({
+          payment_id: String(paymentId),
+          body: { amount: intent.amount },
+        })
+        console.log('[webhook] Reembolso automático iniciado com sucesso para pagamento:', paymentId)
+      } catch (refundErr: any) {
+        console.error('[webhook] ATENÇÃO: Falha ao reembolsar automaticamente pagamento:', paymentId, refundErr?.message || refundErr)
+        // Falha no reembolso — admin precisará processar manualmente via /api/admin/refunds
+      }
+      // Limpar o payment_intent independente do resultado do reembolso
+      await supabaseAdmin.from('payment_intents').delete().eq('id', externalRef)
       return NextResponse.json({ received: true })
     }
+
+    // Apoios (is_support_only) não exigem resposta — criados já como 'answered'
+    const isSupportOnly = Boolean(qd.is_support_only)
+    const now = new Date().toISOString()
 
     // Inserir a pergunta no banco
     const { data: question, error: questionError } = await supabaseAdmin
@@ -146,7 +162,8 @@ export async function POST(request: Request) {
         service_type: qd.service_type,
         is_anonymous: qd.is_anonymous,
         is_shareable: qd.is_shareable,
-        status: 'pending',
+        status: isSupportOnly ? 'answered' : 'pending',
+        ...(isSupportOnly && { answered_at: now, response_text: '❤️ Apoio recebido!' }),
       })
       .select('id')
       .single()

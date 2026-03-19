@@ -18,7 +18,7 @@ const VALID_SERVICE_TYPES = ['base', 'premium'] as const
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { username, question, name, email, amount, serviceType, isAnonymous, isShareable } = body
+    const { username, question, name, email, amount, serviceType, isAnonymous, isShareable, is_support_only } = body
 
     if (!username || !question || !amount) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -85,6 +85,7 @@ export async function POST(request: Request) {
           service_type: sanitizedServiceType,
           is_anonymous: Boolean(isAnonymous),
           is_shareable: Boolean(isShareable),
+          is_support_only: Boolean(is_support_only),
         },
       })
 
