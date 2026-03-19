@@ -33,8 +33,8 @@ export default async function HomePage() {
 
       {/* HERO */}
       <section className="pt-20 pb-14 px-6 text-center max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 bg-white border border-black/8 px-4 py-1.5 rounded-full text-xs font-semibold text-gray-500 mb-8 shadow-sm">
-          <Shield className="w-3.5 h-3.5 text-green-500" />
+        <div className="inline-flex items-center gap-2 bg-gray-50/80 border border-black/5 px-4 py-1.5 rounded-full text-xs font-semibold text-gray-400 mb-8">
+          <Shield className="w-3.5 h-3.5 text-emerald-500" />
           Reembolso automático se não responder em 36h
         </div>
 
@@ -47,7 +47,7 @@ export default async function HomePage() {
         </h1>
 
         <p className="text-gray-500 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-          Respostas personalizadas em texto ou áudio. Receba em até 36h — ou seu dinheiro de volta.
+          Respostas personalizadas e sob sua demanda em texto, áudio ou vídeo. Receba em até 36h — ou seu dinheiro de volta.
         </p>
 
         <SearchBar />
