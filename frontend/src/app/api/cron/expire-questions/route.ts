@@ -48,11 +48,21 @@ export async function POST(req: NextRequest) {
       const tx = Array.isArray(q.transactions) ? q.transactions[0] : q.transactions
 
       if (featureEnabled && tx?.mp_payment_id) {
-        await refundClient.create({
-          payment_id: String(tx.mp_payment_id),
-          body: {},
-        })
-        refunded++
+        try {
+          await refundClient.create({
+            payment_id: String(tx.mp_payment_id),
+            body: {},
+          })
+          refunded++
+        } catch (refundErr: any) {
+          // 423 = reembolso já submetido anteriormente — não é falha
+          if (refundErr?.status === 423 || refundErr?.error === 'resource_already_locked') {
+            console.warn(`[cron/expire-questions] reembolso já existia para ${q.id} — ignorando`)
+            refunded++
+          } else {
+            throw refundErr // propaga outros erros para o catch externo
+          }
+        }
       }
 
       // Notificar o fã que a pergunta expirou (fire-and-forget)
