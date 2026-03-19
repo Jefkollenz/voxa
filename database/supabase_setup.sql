@@ -567,3 +567,34 @@ ON CONFLICT (creator_id) DO UPDATE SET
     marathon_count = EXCLUDED.marathon_count,
     updated_at = NOW();
 */
+
+-- ============================================================
+-- RPC: Get Top 5 Supporters of the Month (by email grouping)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION get_top_supporters(p_creator_id UUID)
+RETURNS TABLE (
+  display_name TEXT,
+  is_anonymous BOOLEAN,
+  total_paid DECIMAL,
+  email_hash TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    (array_agg(q.sender_name ORDER BY q.created_at DESC))[1]::TEXT AS display_name,
+    bool_or(q.is_anonymous) AS is_anonymous,
+    SUM(q.price_paid)::DECIMAL AS total_paid,
+    md5(LOWER(TRIM(q.sender_email))) AS email_hash
+  FROM questions q
+  WHERE
+    q.creator_id = p_creator_id
+    AND q.status IN ('pending', 'answered')
+    AND q.created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo')
+    AND q.sender_email IS NOT NULL
+  GROUP BY LOWER(TRIM(q.sender_email))
+  ORDER BY total_paid DESC
+  LIMIT 5;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+

@@ -2,8 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import QuestionForm from './QuestionForm'
 import AnswerFeedback from './AnswerFeedback'
+import TopSupporters from './TopSupporters'
 import { RESPONSE_DEADLINE_HOURS } from '@/lib/constants'
 import { computeMilestones, CreatorStats } from '@/lib/milestones'
+import { SupporterRow } from '@/lib/supporters'
 import MilestoneBadgeRow from '@/components/milestones/MilestoneBadgeRow'
 import MilestoneSection from '@/components/milestones/MilestoneSection'
 
@@ -54,6 +56,39 @@ const DEMO_STATS: CreatorStats = {
   soldout_days_last30: 8,
   marathon_count: 3,
 }
+
+const DEMO_SUPPORTERS: SupporterRow[] = [
+  {
+    display_name: 'Maria Silva',
+    is_anonymous: false,
+    total_paid: 125.0,
+    email_hash: '5d41402abc4b2a76b9719d911017c592',
+  },
+  {
+    display_name: 'João Santos',
+    is_anonymous: false,
+    total_paid: 90.0,
+    email_hash: '6512bd43d9caa6e02c990b0a82652dca',
+  },
+  {
+    display_name: 'unknown',
+    is_anonymous: true,
+    total_paid: 75.5,
+    email_hash: 'c20ad4d76fe97759aa27a0c99bff6710',
+  },
+  {
+    display_name: 'Ana Costa',
+    is_anonymous: false,
+    total_paid: 55.0,
+    email_hash: 'c4ca4238a0b923820dcc509a6f75849b',
+  },
+  {
+    display_name: 'unknown',
+    is_anonymous: true,
+    total_paid: 40.0,
+    email_hash: 'a87ff679a2f3e71d9181a67b7542122c',
+  },
+]
 
 const DEMO_ANSWERS: PublicAnswer[] = [
   {
@@ -189,6 +224,7 @@ export default async function PerfilPage({
           />
         </div>
         <MilestoneSection milestones={demoMilestones} />
+        <TopSupporters supporters={DEMO_SUPPORTERS} />
         <AnswerFeed publicAnswers={DEMO_ANSWERS} avatarUrl={avatarUrl} displayName={displayName} />
       </div>
     )
@@ -219,7 +255,7 @@ export default async function PerfilPage({
     )
   }
 
-  const [{ data: publicAnswers }, { data: statsData }] = await Promise.all([
+  const [{ data: publicAnswers }, { data: statsData }, { data: topSupporters }] = await Promise.all([
     supabase
       .from('questions')
       .select('id, sender_name, content, service_type, is_anonymous, price_paid, response_text, response_audio_url, answered_at')
@@ -233,6 +269,7 @@ export default async function PerfilPage({
       .from('creator_stats')
       .select('*')
       .eq('creator_id', profile.id),
+    supabase.rpc('get_top_supporters', { p_creator_id: profile.id }).returns<SupporterRow[]>(),
   ])
 
   const milestones = computeMilestones(statsData?.[0] ?? null)
@@ -312,6 +349,9 @@ export default async function PerfilPage({
 
       {/* Conquistas */}
       <MilestoneSection milestones={milestones} />
+
+      {/* Top Apoiadores do Mês */}
+      <TopSupporters supporters={(topSupporters as SupporterRow[]) ?? []} />
 
       {/* Feed de respostas públicas */}
       {publicAnswers && publicAnswers.length > 0 ? (
