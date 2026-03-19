@@ -8,6 +8,8 @@ import { CREATOR_NET_RATE } from '@/lib/constants'
 const RESERVED_USERNAMES = new Set([
   'admin', 'api', 'dashboard', 'login', 'setup', 'perfil', 'vender',
   'auth', 'webhook', 'suporte', 'support', 'help', 'voxa', 'exemplo',
+  'refund', 'refunds', 'join', 'history', 'settings', 'referral',
+  'payment', 'callback', 'status', 'health', 'terms', 'privacy',
 ])
 
 export default function SetupPage() {

@@ -262,6 +262,7 @@ export default async function PerfilPage({
       .eq('creator_id', profile.id)
       .eq('status', 'answered')
       .eq('is_shareable', true)
+      .eq('is_support_only', false)
       .order('answered_at', { ascending: false })
       .limit(10)
       .returns<PublicAnswer[]>(),

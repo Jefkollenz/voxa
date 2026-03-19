@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import MercadoPagoConfig, { Payment } from 'mercadopago'
+import MercadoPagoConfig, { Payment, PaymentRefund } from 'mercadopago'
 import { createClient } from '@supabase/supabase-js'
 import { createHmac } from 'crypto'
+import { sendNewQuestionNotification } from '@/lib/email'
 
 const mp = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN!,
@@ -128,11 +129,27 @@ export async function POST(request: Request) {
       .rpc('can_accept_question', { p_creator_id: qd.creator_id })
 
     if (!canAccept) {
-      // Limite atingido entre o momento do pagamento e a confirmação — será tratado como reembolso
-      console.warn('[webhook] Limite diário atingido para creator:', qd.creator_id, '— pagamento aprovado mas pergunta rejeitada')
-      // Manter o payment_intent para que o sistema de reembolso possa processar
+      // Limite atingido entre o momento do pagamento e a confirmação — reembolsar imediatamente
+      console.warn('[webhook] Limite diário atingido para creator:', qd.creator_id, '— iniciando reembolso automático para pagamento:', paymentId)
+      try {
+        const refundClient = new PaymentRefund(mp)
+        await refundClient.create({
+          payment_id: String(paymentId),
+          body: { amount: intent.amount },
+        })
+        console.log('[webhook] Reembolso automático iniciado com sucesso para pagamento:', paymentId)
+      } catch (refundErr: any) {
+        console.error('[webhook] ATENÇÃO: Falha ao reembolsar automaticamente pagamento:', paymentId, refundErr?.message || refundErr)
+        // Falha no reembolso — admin precisará processar manualmente via /api/admin/refunds
+      }
+      // Limpar o payment_intent independente do resultado do reembolso
+      await supabaseAdmin.from('payment_intents').delete().eq('id', externalRef)
       return NextResponse.json({ received: true })
     }
+
+    // Apoios (is_support_only) não exigem resposta — criados já como 'answered'
+    const isSupportOnly = Boolean(qd.is_support_only)
+    const now = new Date().toISOString()
 
     // Inserir a pergunta no banco
     const { data: question, error: questionError } = await supabaseAdmin
@@ -145,8 +162,11 @@ export async function POST(request: Request) {
         price_paid: qd.price_paid,
         service_type: qd.service_type,
         is_anonymous: qd.is_anonymous,
-        is_shareable: qd.is_shareable,
-        status: 'pending',
+        // Apoios nunca aparecem no feed público — is_shareable é ignorado para evitar confusão
+        is_shareable: isSupportOnly ? false : qd.is_shareable,
+        is_support_only: isSupportOnly,
+        status: isSupportOnly ? 'answered' : 'pending',
+        ...(isSupportOnly && { answered_at: now, response_text: '❤️ Apoio recebido!' }),
       })
       .select('id')
       .single()
@@ -176,6 +196,32 @@ export async function POST(request: Request) {
 
     // Limpar o payment_intent (já foi processado com sucesso)
     await supabaseAdmin.from('payment_intents').delete().eq('id', externalRef)
+
+    // Notificar criador quando pergunta real chega (fire-and-forget — não bloqueia o webhook)
+    if (!isSupportOnly) {
+      try {
+        const { data: userData } = await supabaseAdmin.auth.admin.getUserById(qd.creator_id)
+        const creatorEmail = userData?.user?.email
+        const { data: creatorProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('username')
+          .eq('id', qd.creator_id)
+          .single()
+
+        if (creatorEmail && creatorProfile?.username) {
+          sendNewQuestionNotification(
+            creatorEmail,
+            creatorProfile.username,
+            qd.sender_name,
+            qd.price_paid,
+            qd.content,
+            qd.is_anonymous
+          ).catch((e) => console.error('[webhook] erro ao notificar criador:', e))
+        }
+      } catch (e) {
+        console.error('[webhook] erro ao buscar dados do criador para notificação:', e)
+      }
+    }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {

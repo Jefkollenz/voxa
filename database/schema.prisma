@@ -51,6 +51,7 @@ model Question {
   service_type       String         @default("base")
   is_anonymous       Boolean        @default(false)
   is_shareable       Boolean        @default(false)
+  is_support_only    Boolean        @default(false)
   response_text      String?
   response_audio_url String?
   answered_at        DateTime?

@@ -139,7 +139,7 @@ export default function VenderPage() {
               </div>
               <h3 className="text-xl font-bold mb-3">Login Independente</h3>
               <p className="text-gray-400 leading-relaxed text-sm">
-                Acesse a plataforma via E-mail ou Google. Sem vínculos de API com o Instagram, o que blinda sua conta contra Shadowbans ou Hacks.
+                Acesse a plataforma via Google. Sem vínculos de API com o Instagram, o que blinda sua conta contra Shadowbans ou Hacks.
               </p>
             </div>
 
