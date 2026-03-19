@@ -1,34 +1,7 @@
 import Link from 'next/link'
-import { Shield } from 'lucide-react'
+import { Shield, Play, Mic2, Video } from 'lucide-react'
 import SearchBar from '@/components/SearchBar'
 import { createClient } from '@/lib/supabase/server'
-
-const AMOSTRAS = [
-  {
-    criador: 'Ana Luiza',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=analuiza&backgroundColor=b6e3f4',
-    pergunta: 'Qual o melhor horário para treinar?',
-    preview: 'Depende do seu cronotipo — matutinos performam melhor de manhã, vespertinos à tarde...',
-    nicho: 'Fitness',
-    cor: 'from-rose-500/20 to-orange-500/10',
-  },
-  {
-    criador: 'Rafael Mendes',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=rafaelmendes&backgroundColor=c0aede',
-    pergunta: 'Onde investir com R$ 500/mês?',
-    preview: 'Com esse aporte eu começaria pelo Tesouro Selic como reserva, depois migraria...',
-    nicho: 'Finanças',
-    cor: 'from-violet-500/20 to-blue-500/10',
-  },
-  {
-    criador: 'Marcelo Souza',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=marcelosouza&backgroundColor=ffdfbf',
-    pergunta: 'Como fazer massa de pizza crocante?',
-    preview: 'O segredo está na temperatura do forno e na hidratação da massa...',
-    nicho: 'Gastronomia',
-    cor: 'from-amber-500/20 to-yellow-500/10',
-  },
-]
 
 export default async function HomePage() {
   const supabase = createClient()
@@ -60,8 +33,8 @@ export default async function HomePage() {
 
       {/* HERO */}
       <section className="pt-20 pb-14 px-6 text-center max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 bg-white border border-black/8 px-4 py-1.5 rounded-full text-xs font-semibold text-gray-500 mb-8 shadow-sm">
-          <Shield className="w-3.5 h-3.5 text-green-500" />
+        <div className="inline-flex items-center gap-2 bg-gray-50/80 border border-black/5 px-4 py-1.5 rounded-full text-xs font-semibold text-gray-400 mb-8">
+          <Shield className="w-3.5 h-3.5 text-emerald-500" />
           Reembolso automático se não responder em 36h
         </div>
 
@@ -74,7 +47,7 @@ export default async function HomePage() {
         </h1>
 
         <p className="text-gray-500 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-          Respostas personalizadas em texto ou áudio. Receba em até 36h — ou seu dinheiro de volta.
+          Respostas personalizadas e sob sua demanda em texto, áudio ou vídeo. Receba em até 36h — ou seu dinheiro de volta.
         </p>
 
         <SearchBar />
@@ -131,25 +104,113 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {AMOSTRAS.map((a) => (
-              <div key={a.criador} className="rounded-[14px] overflow-hidden border border-black/8">
-                <div className="relative w-full" style={{ paddingBottom: '177.77%' }}>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${a.cor} bg-white flex flex-col items-center justify-center p-6 text-center`}>
-                    <img src={a.avatar} alt={a.criador} className="w-16 h-16 rounded-full mb-4 border-2 border-white shadow-sm" />
-                    <p className="text-xs font-bold text-[#111] mb-1">{a.criador}</p>
-                    <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full mb-4">#{a.nicho}</span>
-                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 border border-black/8 w-full">
-                      <p className="text-xs font-bold text-[#111] mb-2 leading-snug">"{a.pergunta}"</p>
-                      <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2">{a.preview}</p>
+            {/* Card 1 — TEXTO */}
+            <div className="rounded-[14px] overflow-hidden border border-black/8">
+              <div className="relative w-full" style={{ paddingBottom: '177.77%' }}>
+                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 to-blue-500/10 bg-white flex flex-col items-center justify-center p-5 text-center">
+                  <div className="story-ring mb-3">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=rafaelmendes&backgroundColor=c0aede" alt="Rafael Mendes" className="w-14 h-14 rounded-full border-2 border-white object-cover" />
+                  </div>
+                  <p className="text-xs font-bold text-[#111] mb-0.5">Rafael Mendes</p>
+                  <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full mb-3">#Finanças</span>
+                  <p className="text-[10px] font-semibold text-gray-600 mb-3 leading-snug">
+                    "Onde investir com R$ 500/mês?"
+                  </p>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl rounded-bl-sm p-3 border border-black/8 w-full text-left">
+                    <div className="flex items-start gap-2">
+                      <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=rafaelmendes&backgroundColor=c0aede" alt="Rafael" className="w-6 h-6 rounded-full shrink-0 mt-0.5 object-cover border border-black/5" />
+                      <p className="text-[10px] text-gray-700 leading-relaxed">
+                        Com esse aporte eu começaria pelo Tesouro Selic como reserva, depois migraria para ETFs...
+                      </p>
                     </div>
-                    <div className="mt-4 flex items-center gap-1.5">
-                      <Shield className="w-3 h-3 text-green-500" />
-                      <span className="text-[10px] text-gray-400 font-medium">Garantia VOXA</span>
-                    </div>
+                  </div>
+                  <div className="mt-auto pt-3 flex items-center gap-1.5">
+                    <Shield className="w-3 h-3 text-green-500" />
+                    <span className="text-[10px] text-gray-400 font-medium">Garantia VOXA</span>
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
+
+            {/* Card 2 — ÁUDIO */}
+            <div className="rounded-[14px] overflow-hidden border border-black/8">
+              <div className="relative w-full" style={{ paddingBottom: '177.77%' }}>
+                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/20 to-orange-500/10 bg-white flex flex-col items-center justify-center p-5 text-center">
+                  <div className="story-ring mb-2">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=analuiza&backgroundColor=b6e3f4" alt="Ana Luiza" className="w-14 h-14 rounded-full border-2 border-white object-cover" />
+                  </div>
+                  <p className="text-xs font-bold text-[#111] mb-1">Ana Luiza</p>
+                  <div className="inline-flex items-center gap-1 mb-1">
+                    <Mic2 className="w-3 h-3" style={{color: '#833ab4'}} />
+                    <span className="text-[10px] font-bold text-transparent bg-clip-text bg-gradient-story">Resposta em Áudio</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full mb-3">#Fitness</span>
+                  <p className="text-[10px] font-semibold text-gray-600 mb-3 leading-snug line-clamp-2">
+                    "Qual o melhor carboidrato para consumir com alto volume?"
+                  </p>
+                  <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-3 border border-black/8 w-full">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-7 h-7 rounded-full bg-gradient-story flex items-center justify-center shrink-0 shadow-sm">
+                        <Play className="w-3 h-3 text-white fill-white ml-0.5" />
+                      </div>
+                      <span className="text-[10px] font-mono text-gray-500">00:41 / 02:34</span>
+                    </div>
+                    <div className="flex items-end gap-px h-6 w-full">
+                      {[3,5,8,4,7,9,3,6,8,4,5,7,3,4,6,8,5,3,7,9,4,6,3,5,8,4,7,3].map((h, i) => (
+                        <div
+                          key={i}
+                          className={`flex-1 rounded-full ${i < 11 ? 'bg-[#833ab4]' : 'bg-gray-200'}`}
+                          style={{ height: `${h * 2.5}px` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-3 flex items-center gap-1.5">
+                    <Shield className="w-3 h-3 text-green-500" />
+                    <span className="text-[10px] text-gray-400 font-medium">Garantia VOXA</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 3 — VÍDEO */}
+            <div className="rounded-[14px] overflow-hidden border border-black/8">
+              <div className="relative w-full" style={{ paddingBottom: '177.77%' }}>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 to-yellow-500/10 bg-white flex flex-col items-center justify-center p-5 text-center">
+                  <div className="story-ring mb-2">
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=marcelosouza&backgroundColor=ffdfbf" alt="Marcelo Souza" className="w-14 h-14 rounded-full border-2 border-white object-cover" />
+                  </div>
+                  <p className="text-xs font-bold text-[#111] mb-1">Marcelo Souza</p>
+                  <div className="inline-flex items-center gap-1 mb-1">
+                    <Video className="w-3 h-3" style={{color: '#fd1d1d'}} />
+                    <span className="text-[10px] font-bold text-transparent bg-clip-text bg-gradient-story">Resposta em Vídeo</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full mb-3">#Lifestyle</span>
+                  <p className="text-[10px] font-semibold text-gray-600 mb-3 leading-snug line-clamp-2">
+                    "Minha namorada é uma grande fã sua, pode gravar um vídeo de parabéns?"
+                  </p>
+                  <div className="relative w-full rounded-xl overflow-hidden aspect-video shadow-sm">
+                    <img
+                      src="https://api.dicebear.com/7.x/avataaars/svg?seed=marcelosouza&backgroundColor=ffdfbf"
+                      className="w-full h-full object-cover"
+                      alt="Thumbnail"
+                    />
+                    <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-md">
+                        <Play className="w-4 h-4 text-[#111] fill-[#111] ml-0.5" />
+                      </div>
+                    </div>
+                    <div className="absolute bottom-1.5 right-2">
+                      <span className="text-white text-[10px] font-mono font-bold drop-shadow">0:45</span>
+                    </div>
+                  </div>
+                  <div className="mt-auto pt-3 flex items-center gap-1.5">
+                    <Shield className="w-3 h-3 text-green-500" />
+                    <span className="text-[10px] text-gray-400 font-medium">Garantia VOXA</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

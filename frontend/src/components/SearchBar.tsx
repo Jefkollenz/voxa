@@ -81,11 +81,11 @@ export default function SearchBar() {
           }}
           onBlur={() => setMostraSugestoes(false)}
           placeholder="Para quem você tem uma pergunta?"
-          className="w-full bg-white border border-black/10 rounded-2xl py-4 pl-12 pr-32 text-[#111] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#833ab4]/30 focus:border-[#833ab4]/40 transition-all text-sm shadow-sm"
+          className="w-full bg-white border border-black/10 rounded-2xl py-4 pl-12 pr-32 text-[#111] placeholder-gray-400 focus:outline-none focus:ring-0 focus:border-[#833ab4]/50 focus:shadow-[0_0_0_4px_rgba(131,58,180,0.08)] transition-all text-sm shadow-sm"
         />
         <button
           type="submit"
-          className="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-story text-white text-xs font-bold px-4 py-3 rounded-xl hover:opacity-90 hover:shadow-[0_4px_20px_rgba(131,58,180,0.4)] transition-all duration-200 cursor-pointer"
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-story text-white text-sm font-bold px-5 py-3 rounded-xl hover:opacity-90 hover:shadow-[0_4px_20px_rgba(131,58,180,0.4)] transition-all duration-200 cursor-pointer"
         >
           Buscar
         </button>
