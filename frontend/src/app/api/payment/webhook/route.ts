@@ -161,7 +161,9 @@ export async function POST(request: Request) {
         price_paid: qd.price_paid,
         service_type: qd.service_type,
         is_anonymous: qd.is_anonymous,
-        is_shareable: qd.is_shareable,
+        // Apoios nunca aparecem no feed público — is_shareable é ignorado para evitar confusão
+        is_shareable: isSupportOnly ? false : qd.is_shareable,
+        is_support_only: isSupportOnly,
         status: isSupportOnly ? 'answered' : 'pending',
         ...(isSupportOnly && { answered_at: now, response_text: '❤️ Apoio recebido!' }),
       })

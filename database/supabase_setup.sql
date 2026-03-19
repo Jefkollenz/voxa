@@ -35,6 +35,7 @@ CREATE TABLE questions (
     service_type TEXT NOT NULL DEFAULT 'base',
     is_anonymous BOOLEAN DEFAULT FALSE,
     is_shareable BOOLEAN DEFAULT FALSE,
+    is_support_only BOOLEAN DEFAULT FALSE,
     response_text TEXT,
     response_audio_url TEXT,
     answered_at TIMESTAMP WITH TIME ZONE,
@@ -210,6 +211,9 @@ ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS transactions_mp_payment_id
 -- ============================================================
 -- CORREÇÕES E MELHORIAS (POST-BETA)
 -- ============================================================
+
+-- Adicionar is_support_only para distinguir apoios de perguntas
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_support_only BOOLEAN DEFAULT FALSE;
 
 -- Adicionar campos updated_at para audit trail
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
