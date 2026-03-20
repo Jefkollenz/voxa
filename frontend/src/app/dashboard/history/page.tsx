@@ -89,6 +89,31 @@ export default async function HistoryPage({
   const avgPerQuestion = totalCount > 0 ? totalNetEarnings / totalCount : 0
   const totalPages = Math.ceil(totalCount / pageSize)
 
+  // Projeção mensal e comparativo semanal (sempre relativo a hoje, ignorando filtro de período)
+  const last7DaysStr = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const prev7DaysStr = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+  const monthStartStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+  const [{ data: currentWeekData }, { data: prevWeekData }, { data: monthData }] = await Promise.all([
+    supabase.from('questions').select('price_paid')
+      .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
+      .gte('answered_at', last7DaysStr),
+    supabase.from('questions').select('price_paid')
+      .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
+      .gte('answered_at', prev7DaysStr).lt('answered_at', last7DaysStr),
+    supabase.from('questions').select('price_paid')
+      .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
+      .gte('answered_at', monthStartStr),
+  ])
+
+  const currentWeekNet = (currentWeekData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
+  const prevWeekNet = (prevWeekData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
+  const weekDiff = currentWeekNet - prevWeekNet
+  const dailyAvg = currentWeekNet / 7
+  const monthToDate = (monthData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
+  const daysRemaining = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate()
+  const monthProjection = monthToDate + dailyAvg * daysRemaining
+
   const formatDate = (iso: string) => {
     return new Date(iso).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -135,6 +160,24 @@ export default async function HistoryPage({
             </p>
           </div>
         </div>
+
+        {/* Projeção mensal */}
+        {dailyAvg > 0 && (
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-2xl p-4 mb-6">
+            <p className="text-sm text-gray-500 mb-1">Projeção para este mês</p>
+            <p className="text-2xl font-bold text-gray-900">
+              R$ {monthProjection.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Se mantiver o ritmo dos últimos 7 dias
+            </p>
+            {weekDiff !== 0 && (
+              <p className={`text-sm mt-2 font-medium ${weekDiff > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                {weekDiff > 0 ? '↑' : '↓'} R$ {Math.abs(weekDiff).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs semana passada
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Entenda seus ganhos */}
         <details className="bg-white rounded-2xl shadow-sm border border-gray-100 mb-6">

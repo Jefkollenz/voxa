@@ -5,6 +5,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CREATOR_NET_RATE } from '@/lib/constants'
 
+function getPriceBenchmark(price: number): string {
+  if (price < 15) return 'Abaixo da média — pode deixar dinheiro na mesa'
+  if (price <= 25) return 'Faixa popular — boa conversão para criadores iniciantes'
+  if (price <= 50) return 'Faixa recomendada — equilíbrio entre volume e valor'
+  if (price <= 100) return 'Faixa premium — ideal para especialistas com audiência engajada'
+  return 'Exclusivo — para criadores com forte reputação no nicho'
+}
+
 const RESERVED_USERNAMES = new Set([
   'admin', 'api', 'dashboard', 'login', 'setup', 'perfil', 'vender',
   'auth', 'webhook', 'suporte', 'support', 'help', 'voxa', 'exemplo',
@@ -64,12 +72,27 @@ export default function SetupPage() {
     setError('')
 
     const supabase = createClient()
+
+    // Ler referral do localStorage (válido por 7 dias)
+    let referredById: string | null = null
+    const ref = localStorage.getItem('voxa_ref')
+    const refAt = localStorage.getItem('voxa_ref_at')
+    if (ref && refAt && Date.now() - parseInt(refAt) < 7 * 24 * 60 * 60 * 1000) {
+      const { data: referrer } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', ref)
+        .single()
+      referredById = referrer?.id ?? null
+    }
+
     const { error } = await supabase.from('profiles').insert({
       id: userId,
       username: username.toLowerCase().trim(),
       bio: bio.trim() || null,
       min_price: minPrice,
       daily_limit: dailyLimit,
+      referred_by_id: referredById,
     })
 
     if (error) {
@@ -151,6 +174,8 @@ export default function SetupPage() {
               <span>R$ 5</span>
               <span>R$ 100</span>
             </div>
+            <p className="text-xs text-gray-400 mt-1.5 italic">💡 {getPriceBenchmark(minPrice)}</p>
+            <p className="text-xs text-gray-600 mt-0.5">Criadores similares cobram entre R$20–R$50. Você pode alterar isso a qualquer momento.</p>
           </div>
 
           {/* Limite diário */}
