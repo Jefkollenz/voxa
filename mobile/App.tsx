@@ -29,7 +29,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="dark" backgroundColor="#ffffff" />
       <WebView
         ref={webviewRef}
         source={{ uri: VOXA_URL }}
