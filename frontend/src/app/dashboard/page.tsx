@@ -21,6 +21,7 @@ type Question = {
   is_anonymous: boolean
   created_at: string
   status: string
+  transactions?: { creator_net: number | null }[]
 }
 
 type Profile = {
@@ -57,7 +58,7 @@ export default function DashboardPage() {
       const [{ data: questionsData }, { data: statsData }] = await Promise.all([
         supabase
           .from('questions')
-          .select('id, sender_name, content, price_paid, service_type, is_shareable, is_anonymous, created_at, status')
+          .select('id, sender_name, content, price_paid, service_type, is_shareable, is_anonymous, created_at, status, transactions(creator_net)')
           .eq('creator_id', user.id)
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
@@ -114,7 +115,10 @@ export default function DashboardPage() {
     )
   }
 
-  const pendingEarnings = questions.reduce((sum, q) => sum + Number(q.price_paid), 0)
+  const pendingEarnings = questions.reduce((sum, q) => {
+    const net = q.transactions?.[0]?.creator_net
+    return sum + (net != null ? Number(net) : Number(q.price_paid) * CREATOR_NET_RATE)
+  }, 0)
   const questionsLeft = Math.max(0, profile.daily_limit - profile.questions_answered_today)
 
   return (
@@ -131,9 +135,9 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">A receber</p>
             <p className="text-2xl font-bold text-green-600">
-              R$ {(pendingEarnings * CREATOR_NET_RATE).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R$ {pendingEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-xs text-gray-500 mt-1">líquido após taxa Voxa (10%)</p>
+            <p className="text-xs text-gray-500 mt-1">líquido após taxas</p>
           </div>
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
             <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Vagas hoje</p>

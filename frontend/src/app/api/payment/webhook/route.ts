@@ -94,6 +94,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true })
     }
 
+    // Extrair taxa de processamento cobrada pelo MP (soma de todos os fees do coletor)
+    const processingFee = ((payment as any).fee_details ?? [])
+      .filter((f: any) => f.fee_payer === 'collector')
+      .reduce((sum: number, f: any) => sum + Number(f.amount ?? 0), 0)
+
     const externalRef = payment.external_reference
     if (!externalRef) {
       return NextResponse.json({ received: true })
@@ -184,10 +189,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Erro ao salvar pergunta' }, { status: 500 })
     }
 
+    // Calcular taxa da plataforma e valor líquido do criador
+    // Busca username junto para reutilizar na notificação por email (evita segunda query)
+    const [{ data: platformSettings }, { data: creatorProfileData }] = await Promise.all([
+      supabaseAdmin.from('platform_settings').select('platform_fee_rate').eq('id', 1).single(),
+      supabaseAdmin.from('profiles').select('custom_creator_rate, username').eq('id', qd.creator_id).single(),
+    ])
+    const platformFeeRate = Number(platformSettings?.platform_fee_rate ?? 0.1)
+    const rawCustomRate = creatorProfileData?.custom_creator_rate
+    const customCreatorRate = rawCustomRate != null ? Number(rawCustomRate) : null
+    const creatorRate = customCreatorRate ?? (1 - platformFeeRate)
+    // Garantir que a taxa de processamento não excede o valor bruto (caso extremo)
+    const netBeforePlatform = Math.max(0, Number(intent.amount) - processingFee)
+    // Arredondar creator_net para 2 casas e derivar platform_fee como remainder (garante fechamento contábil)
+    const creatorNet = Math.round(netBeforePlatform * creatorRate * 100) / 100
+    const platformFee = Math.round((netBeforePlatform - creatorNet) * 100) / 100
+
     // Inserir a transação
     const { error: transactionError } = await supabaseAdmin.from('transactions').insert({
       question_id: question.id,
       amount: intent.amount,
+      processing_fee: processingFee,
+      platform_fee: platformFee,
+      creator_net: creatorNet,
       status: 'approved',
       payment_method: payment.payment_type_id ?? 'unknown',
       mp_payment_id: String(paymentId),
@@ -215,16 +239,11 @@ export async function POST(request: Request) {
       try {
         const { data: userData } = await supabaseAdmin.auth.admin.getUserById(qd.creator_id)
         const creatorEmail = userData?.user?.email
-        const { data: creatorProfile } = await supabaseAdmin
-          .from('profiles')
-          .select('username')
-          .eq('id', qd.creator_id)
-          .single()
 
-        if (creatorEmail && creatorProfile?.username) {
+        if (creatorEmail && creatorProfileData?.username) {
           sendNewQuestionNotification(
             creatorEmail,
-            creatorProfile.username,
+            creatorProfileData.username,
             qd.sender_name,
             qd.price_paid,
             qd.content,

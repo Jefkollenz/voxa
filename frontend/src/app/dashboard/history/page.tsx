@@ -19,6 +19,13 @@ type AnsweredQuestion = {
   response_text: string | null
   response_audio_url: string | null
   answered_at: string
+  transactions?: { creator_net: number | null }[]
+}
+
+// Retorna o valor líquido real da transação, ou estimativa para registros antigos
+function effectiveNet(q: { price_paid: number; transactions?: { creator_net: number | null }[] }): number {
+  const net = q.transactions?.[0]?.creator_net
+  return net != null ? Number(net) : Number(q.price_paid) * CREATOR_NET_RATE
 }
 
 export default async function HistoryPage({
@@ -59,7 +66,7 @@ export default async function HistoryPage({
 
   let query = supabase
     .from('questions')
-    .select('id, sender_name, content, price_paid, service_type, is_anonymous, is_shareable, response_text, response_audio_url, answered_at', { count: 'exact' })
+    .select('id, sender_name, content, price_paid, service_type, is_anonymous, is_shareable, response_text, response_audio_url, answered_at, transactions(creator_net)', { count: 'exact' })
     .eq('creator_id', profile.id)
     .eq('status', 'answered')
     .order('answered_at', { ascending: false })
@@ -75,7 +82,7 @@ export default async function HistoryPage({
   // Totais (sem paginação — para métricas)
   let totalQuery = supabase
     .from('questions')
-    .select('price_paid', { count: 'exact' })
+    .select('price_paid, transactions(creator_net)', { count: 'exact' })
     .eq('creator_id', profile.id)
     .eq('status', 'answered')
 
@@ -85,8 +92,7 @@ export default async function HistoryPage({
 
   const { data: allAnswered } = await totalQuery
 
-  const totalGrossEarnings = (allAnswered ?? []).reduce((sum, q) => sum + Number(q.price_paid), 0)
-  const totalNetEarnings = totalGrossEarnings * CREATOR_NET_RATE
+  const totalNetEarnings = (allAnswered ?? []).reduce((sum, q) => sum + effectiveNet(q), 0)
   const totalCount = count ?? 0
   const avgPerQuestion = totalCount > 0 ? totalNetEarnings / totalCount : 0
   const totalPages = Math.ceil(totalCount / pageSize)
@@ -97,22 +103,22 @@ export default async function HistoryPage({
   const monthStartStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
   const [{ data: currentWeekData }, { data: prevWeekData }, { data: monthData }] = await Promise.all([
-    supabase.from('questions').select('price_paid')
+    supabase.from('questions').select('price_paid, transactions(creator_net)')
       .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
       .gte('answered_at', last7DaysStr),
-    supabase.from('questions').select('price_paid')
+    supabase.from('questions').select('price_paid, transactions(creator_net)')
       .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
       .gte('answered_at', prev7DaysStr).lt('answered_at', last7DaysStr),
-    supabase.from('questions').select('price_paid')
+    supabase.from('questions').select('price_paid, transactions(creator_net)')
       .eq('creator_id', profile.id).eq('status', 'answered').eq('is_support_only', false)
       .gte('answered_at', monthStartStr),
   ])
 
-  const currentWeekNet = (currentWeekData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
-  const prevWeekNet = (prevWeekData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
+  const currentWeekNet = (currentWeekData || []).reduce((s, q) => s + effectiveNet(q), 0)
+  const prevWeekNet = (prevWeekData || []).reduce((s, q) => s + effectiveNet(q), 0)
   const weekDiff = currentWeekNet - prevWeekNet
   const dailyAvg = currentWeekNet / 7
-  const monthToDate = (monthData || []).reduce((s, q) => s + Number(q.price_paid) * CREATOR_NET_RATE, 0)
+  const monthToDate = (monthData || []).reduce((s, q) => s + effectiveNet(q), 0)
   const daysRemaining = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate()
   const monthProjection = monthToDate + dailyAvg * daysRemaining
 
@@ -177,10 +183,11 @@ export default async function HistoryPage({
           <div className="px-5 pb-4 text-sm text-gray-500 leading-relaxed border-t border-gray-100 pt-3">
             <p>
               O fã paga <span className="font-semibold text-gray-700">R$ 10,00</span> →
-              Voxa retém 10% (<span className="text-gray-600">R$ 1,00</span>) →
-              Você recebe <span className="font-bold text-green-600">R$ 9,00</span>
+              Mercado Pago desconta a taxa de processamento (ex.: ~R$ 0,10 para PIX) →
+              Voxa retém 10% do líquido →
+              Você recebe o restante.
             </p>
-            <p className="mt-1 text-xs text-gray-500">Todos os valores exibidos já são líquidos.</p>
+            <p className="mt-1 text-xs text-gray-500">Todos os valores exibidos já são líquidos após taxa de processamento e taxa Voxa.</p>
           </div>
         </details>
 
@@ -235,7 +242,7 @@ export default async function HistoryPage({
                   <div className="flex items-center gap-2 shrink-0">
                     <VisibilityToggle questionId={q.id} initialVisible={q.is_shareable} />
                     <span className="text-green-600 font-bold bg-green-50 border border-green-200 px-2 py-1 rounded-lg text-sm">
-                      +R$ {(Number(q.price_paid) * CREATOR_NET_RATE).toFixed(2).replace('.', ',')}
+                      +R$ {effectiveNet(q).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 </div>

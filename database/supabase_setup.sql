@@ -53,6 +53,9 @@ CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     amount DECIMAL(10, 2) NOT NULL,
+    processing_fee DECIMAL(10, 2),   -- Taxa cobrada pelo Mercado Pago (fee_details)
+    platform_fee DECIMAL(10, 2),     -- Taxa da plataforma VOXA sobre (amount - processing_fee)
+    creator_net DECIMAL(10, 2),      -- Valor líquido repassado ao criador
     status TEXT NOT NULL,
     payment_method TEXT NOT NULL,
     mp_payment_id TEXT UNIQUE,

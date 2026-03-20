@@ -67,6 +67,9 @@ model Transaction {
   question_id      String
   question         Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
   amount           Decimal  @db.Decimal(10, 2)
+  processing_fee   Decimal? @db.Decimal(10, 2) // Taxa cobrada pelo Mercado Pago (fee_details)
+  platform_fee     Decimal? @db.Decimal(10, 2) // Taxa da plataforma VOXA sobre (amount - processing_fee)
+  creator_net      Decimal? @db.Decimal(10, 2) // Valor líquido repassado ao criador
   status           String
   payment_method   String
   mp_payment_id    String?  @unique
