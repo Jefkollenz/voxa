@@ -247,7 +247,8 @@ export async function POST(request: Request) {
             qd.sender_name,
             qd.price_paid,
             qd.content,
-            qd.is_anonymous
+            qd.is_anonymous,
+            creatorNet
           ).catch((e) => console.error('[webhook] erro ao notificar criador:', e))
         }
       } catch (e) {
