@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
 
 export default function ReferralDashboardPage() {
   const router = useRouter()
@@ -38,14 +39,7 @@ export default function ReferralDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 py-4 px-6 md:px-12 flex items-center gap-3 shadow-sm">
-        <a href="/dashboard" className="text-gray-500 hover:text-gray-600 transition-colors">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </a>
-        <h1 className="font-bold text-xl text-gradient-instagram">VOXA <span className="text-gray-500 font-normal">| Afiliados</span></h1>
-      </header>
+      <Header username={username} />
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-6 py-10">
         <div className="mb-10 text-center">

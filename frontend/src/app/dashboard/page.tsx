@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import QuestionList from './QuestionList'
 import BottomNav from '@/components/BottomNav'
+import Header from '@/components/Header'
 import { CREATOR_NET_RATE } from '@/lib/constants'
 import { computeMilestones, CreatorStats, Milestone } from '@/lib/milestones'
 import MilestoneProgress from '@/components/milestones/MilestoneProgress'
@@ -77,14 +78,9 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-          <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="h-6 w-16 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-24 bg-gray-100 rounded animate-pulse" />
-          </div>
-        </header>
-        <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <Header />
+        <main className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[0, 1, 2].map(i => (
               <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
@@ -122,41 +118,10 @@ export default function DashboardPage() {
   const questionsLeft = Math.max(0, profile.daily_limit - profile.questions_answered_today)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <h1 className="font-bold text-xl text-gradient-instagram">VOXA</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-4">
-              <a href={`/perfil/${profile.username}`} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                Meu perfil
-              </a>
-              <a href="/dashboard/history" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                Histórico
-              </a>
-              <a href="/dashboard/settings" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                Configurações
-              </a>
-            </div>
-            <button
-              onClick={async () => {
-                const supabase = createClient()
-                await supabase.auth.signOut()
-                router.push('/')
-              }}
-              className="text-gray-500 hover:text-red-500 transition-colors cursor-pointer"
-              aria-label="Sair da conta"
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Header username={profile.username} />
 
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full">
         {/* Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
