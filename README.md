@@ -1,199 +1,131 @@
-# VOXA
+# VOXA 🎙️
 
-Plataforma de monetização para criadores de conteúdo brasileiros. Fãs pagam para enviar perguntas com garantia de resposta em até 36 horas via texto ou áudio.
+**VOXA** é uma plataforma de monetização para criadores de conteúdo (influencers) no mercado brasileiro. A plataforma permite que os fãs paguem para enviar perguntas ou mensagens de apoio (suporte) aos criadores, com garantia de resposta (em texto ou áudio) em até 36 horas para as perguntas. A plataforma cobra uma taxa sobre cada transação.
 
-**Deploy:** [Render.com](https://render.com) · **Banco:** Supabase · **Pagamentos:** Mercado Pago
+![Status](https://img.shields.io/badge/Status-Beta-blue)
+![Next.js](https://img.shields.io/badge/Next.js-14.1-black)
+![React](https://img.shields.io/badge/React-18-blue)
+![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e)
 
----
+## 🚀 Funcionalidades
 
-## Pré-requisitos
+- **Autenticação:** Login social via Google OAuth (Supabase Auth).
+- **Perfis Customizáveis:** Bio, avatar, preço mínimo por resposta, limites diários e link customizado (`/perfil/username`).
+- **Painel do Criador:** Gerenciamento de perguntas pendentes, métricas de ganhos, hitórico paginado e barra de progresso de marcos (milestones).
+- **Respostas:** Suporte a respostas em texto ou áudio (via MediaRecorder e Supabase Storage).
+- **Modo Apoio:** Fãs podem enviar pagamentos de contribuição sem exigir uma resposta rápida ("Apenas Apoiar").
+- **Integração de Pagamentos:** Mercado Pago (Checkout Pro - PIX e Cartão de Crédito) com Webhooks verificados por assinaturas HMAC.
+- **Reembolsos Automáticos:** Caso o limite diário seja alcançado durante concorrência de pagamentos.
+- **Compartilhamento Social:** Geração de imagens otimizadas para Stories do Instagram (via html2canvas).
+- **Painel Admin:** Gerenciamento de criadores (banimentos, taxas customizadas), gerenciamento da taxa global de uso e controle de prazos.
 
-- Node.js 18+
-- Conta no [Supabase](https://supabase.com)
-- Conta no [Mercado Pago Developers](https://developers.mercadopago.com)
-- (Opcional) [ngrok](https://ngrok.com) para testar webhooks localmente
+## 🛠️ Stack Tecnológico
 
----
+- **Frontend:** Next.js 14.1 (App Router), React 18, TypeScript 5.
+- **Estilização:** Tailwind CSS 3.3 com tema customizado (dark-first, gradientes baseados no Instagram) e Lucide React (Ícones).
+- **Backend, Banco de Dados & Storage:** Supabase (Auth, PostgreSQL RLS, Storage de Áudios).
+- **Pagamentos:** Checkout do Mercado Pago.
+- **Hospedagem / Deploy:** Render.com.
 
-## Setup local
+## 📦 Estrutura do Projeto
 
-### 1. Instalar dependências
-
-```bash
-cd frontend && npm install
+```text
+voxa/
+├── CLAUDE.md                   # Guia detalhado de arquitetura e funcionamento interno
+├── README.md                   # Este arquivo (guia de setup)
+├── frontend/                   # Aplicação Next.js (Interface e rotas Server-Side)
+│   ├── src/app/                # Rotas App Router (páginas, APIs de webhook, admin)
+│   ├── src/lib/                # Utilitários (Supabase clients, MercadoPago)
+│   ├── public/                 # Assets (imagens, favicon, etc)
+│   └── package.json            # Dependências gerenciadas pelo NPM
+├── database/                   # Definições do banco de dados (tabelas, policies, functions)
+│   ├── schema.prisma           # Schema auxiliar para visibilidade (referência)
+│   └── supabase_setup.sql      # Script completo para setup no Supabase
+└── plans/                      # Documentação de rastreio de tarefas do projeto
 ```
 
-### 2. Configurar variáveis de ambiente
+## 🏗️ Pré-requisitos
 
+Para rodar o projeto localmente, tenha na sua máquina:
+
+- Node.js `18.x` ou versão superior
+- NPM
+- Uma conta no [Supabase](https://supabase.com/)
+- Conta de vendedor/desenvolvedor no [Mercado Pago](https://www.mercadopago.com.br/developers)
+
+## ⚙️ Instalação e Configuração Local
+
+### 1. Clonar o repositório
 ```bash
-cp frontend/.env.example frontend/.env.local
+git clone https://github.com/seu-usuario/voxa.git
+cd voxa
 ```
 
-Preencher `frontend/.env.local`:
+### 2. Instalar dependências Frontend
+```bash
+cd frontend
+npm install
+```
+
+### 3. Configuração do Supabase
+1. Crie um novo projeto no Supabase.
+2. Acesse a seção **SQL Editor** do projeto e execute o conteúdo de `database/supabase_setup.sql` para criar todo o banco. Isto iniciará seu esquema, Storage (bucket de audios) e suas RLS Policies.
+3. Não esqueça de verificar a existência de `increment_answered_today` para incrementar estatísticas.
+4. Vá em **Authentication > Providers** e ative o provider **Google** com seu Client ID e Secret.
+5. Adicione sua URL em *Authentication > URL Configuration > Redirect URLs* (ex: `http://localhost:3000/auth/callback`).
+
+### 4. Variáveis de Ambiente
+Crie um arquivo `.env.local` na pasta `frontend/`, copiando as informações de `.env.example`:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
+cp .env.example .env.local
+```
 
-MP_ACCESS_TOKEN=TEST-...
-NEXT_PUBLIC_MP_PUBLIC_KEY=TEST-...
+Complete as variáveis obrigatórias:
 
+```env
+# Banco de Dados Supabase (obtenha nas settings > API do seu projeto Supabase)
+NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
+SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
+
+# Mercado Pago (obtenha na seção "Suas integrações" no portal devs MP)
+MP_ACCESS_TOKEN=TEST-xxxxxxxx # Recomendado focar no accessToken de Teste inicialmente
+MP_WEBHOOK_SECRET=sua_secret_de_webhook
+NEXT_PUBLIC_MP_PUBLIC_KEY=sua_public_key
+
+# Aplicação Base
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-MP_WEBHOOK_SECRET=qualquer-string-secreta
-REFUND_SECRET=outra-string-secreta
+REFUND_SECRET=texto_seguro_arbitrario_exemplo
 FEATURE_REFUNDS_ENABLED=false
 ```
 
-### 3. Configurar banco de dados
-
-No [SQL Editor do Supabase](https://app.supabase.com), executar **em ordem**:
-
-```sql
--- 1. Cole o conteúdo de database/supabase_setup.sql
-
--- 2. Função obrigatória
-CREATE OR REPLACE FUNCTION increment_answered_today(profile_id UUID)
-RETURNS void AS $$
-BEGIN
-  UPDATE profiles SET questions_answered_today = questions_answered_today + 1
-  WHERE id = profile_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-**Se o banco já existia antes de 2026-03-19**, rodar também:
-```sql
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_support_only BOOLEAN DEFAULT FALSE;
-```
-
-### 4. Configurar autenticação Google
-
-No painel Supabase > Authentication > Providers > Google:
-- Ativar com Client ID e Client Secret do [Google Cloud Console](https://console.cloud.google.com)
-- Redirect URL autorizada: `https://{SEU_SUPABASE_URL}/auth/v1/callback`
-
-No painel Supabase > Authentication > URL Configuration:
-- Site URL: `http://localhost:3000`
-- Redirect URLs: `http://localhost:3000/auth/callback`
-
-### 5. Configurar Storage
-
-No painel Supabase > Storage:
-- Criar bucket chamado `responses` como **público**
-
-### 6. Rodar
+### 5. Webhooks Locais do Mercado Pago
+Para simular transações pagas com o Mercado Pago na sua máquina, exponha sua porta local usando o `ngrok`:
 
 ```bash
-cd frontend && npm run dev
-# http://localhost:3000
-```
+# Terminal 1: Iniciar Next.js
+npm run dev
 
----
-
-## Testar pagamentos localmente
-
-O webhook do Mercado Pago precisa de URL pública. Use ngrok:
-
-```bash
+# Terminal 2: Ngrok
 ngrok http 3000
 ```
+Pegue a URL pública fornecida pelo `ngrok` (ex `https://1a2b-3c.ngrok-free.app`), vá ao painel de Webhooks do Mercado Pago, configure para disparar no path `/api/payment/webhook` para eventos de **pagamentos**.
 
-No painel Mercado Pago > Webhooks:
-- URL: `https://xxxx.ngrok.io/api/payment/webhook`
-- Evento: `payments`
-- Copiar o **secret** para `MP_WEBHOOK_SECRET` no `.env.local`
-
----
-
-## Estrutura do projeto
-
+### 6. Executando o Projeto
+Execute o servidor:
+```bash
+npm run dev
 ```
-voxa/
-├── database/
-│   ├── schema.prisma        # Schema fonte de verdade
-│   └── supabase_setup.sql   # SQL completo para setup do zero
-└── frontend/
-    └── src/
-        ├── app/
-        │   ├── page.tsx         # Landing page
-        │   ├── login/           # Google OAuth
-        │   ├── setup/           # Onboarding do criador
-        │   ├── vender/          # Marketing + simulador de ganhos
-        │   ├── perfil/          # Perfil público + formulário de pagamento
-        │   ├── dashboard/       # Painel do criador (perguntas, histórico, settings)
-        │   ├── admin/           # Painel administrativo
-        │   └── api/
-        │       ├── payment/     # create-preference + webhook (HMAC)
-        │       ├── questions/   # PATCH resposta + visibilidade
-        │       ├── refunds/     # Fila de reembolsos (desabilitado)
-        │       └── admin/       # Ban, taxa custom, reembolso manual
-        └── lib/
-            ├── supabase/        # Clients server e client
-            ├── constants.ts     # CREATOR_NET_RATE, RESPONSE_DEADLINE_HOURS
-            ├── admin.ts         # getAdminUser()
-            └── milestones.ts    # computeMilestones() — marcos e badges
-```
+Acesse [http://localhost:3000](http://localhost:3000) em seu navegador.
 
----
+## 📌 Documentação Aprofundada
 
-## Fluxo de pagamento
+Por favor, para fluxos complexos, verifique o arquivo **[`CLAUDE.md`](./CLAUDE.md)** antes de realizar alterações core, lá você encontrará descrições de:
+- Modo Pagamento vs Modo Apoio e seus webhooks.
+- Fluxo detalhado do painel Admin.
+- Arquitetura oficial de banco e observações sobre uso de funções Cron Jobs.
 
-```
-Fã → formulário no perfil → POST /api/payment/create-preference
-  → Mercado Pago Checkout (PIX ou cartão)
-  → POST /api/payment/webhook (assinatura HMAC verificada)
-  → question criada no banco
-  → criador vê no dashboard → responde → fã recebe notificação
-```
+## 📝 Licença
 
-**Modo Apoio:** fã envia valor sem exigir resposta. A question é criada como `answered` imediatamente, não aparece no dashboard do criador nem no feed público.
-
-**Race condition protegida:** Se o `daily_limit` for atingido entre o pagamento e o webhook, o reembolso é iniciado automaticamente via `PaymentRefund` do Mercado Pago.
-
----
-
-## Deploy no Render.com
-
-1. Criar **Web Service** apontando para este repositório
-2. Root Directory: `frontend`
-3. Build Command: `npm install && npm run build`
-4. Start Command: `npm start`
-5. Adicionar todas as variáveis de ambiente com `NEXT_PUBLIC_APP_URL` apontando para o domínio Render
-6. Atualizar Supabase > Authentication > URL Configuration com o domínio de produção
-7. Atualizar webhook do Mercado Pago com a URL de produção
-
-> Guia detalhado: `plans/2026-03-13-render-deploy.md`
-
----
-
-## Admin panel
-
-Acessível em `/admin`. Para ativar o admin em um usuário:
-
-```sql
-UPDATE profiles SET is_admin = true WHERE username = 'seu-username';
-```
-
-Funcionalidades: visão geral · ban/unban criadores · taxa e prazo customizados · reembolso manual · configurações globais da plataforma.
-
----
-
-## Variáveis de ambiente
-
-| Variável | Obrigatória | Descrição |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | URL do projeto Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Chave anônima |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Service role (server-side apenas) |
-| `MP_ACCESS_TOKEN` | ✅ | Token MP (`TEST-...` sandbox / `APP_USR-...` produção) |
-| `NEXT_PUBLIC_MP_PUBLIC_KEY` | ✅ | Public key MP |
-| `NEXT_PUBLIC_APP_URL` | ✅ | URL base da aplicação |
-| `MP_WEBHOOK_SECRET` | ✅ | Secret HMAC do webhook MP |
-| `REFUND_SECRET` | ✅ | Token para o cron de reembolsos |
-| `FEATURE_REFUNDS_ENABLED` | ❌ | `true` para ativar reembolsos automáticos |
-
----
-
-> Desenvolvido no Brasil por Jeferson Kollenz.
+Desenvolvido para uso comercial. Copyright (c) 2026 VOXA. Todos os direitos reservados.

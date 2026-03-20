@@ -1,6 +1,7 @@
 -- ============================================================
 -- VOXA — Setup completo do banco no Supabase
 -- Rodar INTEIRO no SQL Editor do Supabase (uma vez)
+-- Arquivo unificado e limpo contendo todas as definições.
 -- ============================================================
 
 -- 1. Enum de status da pergunta
@@ -10,16 +11,20 @@ CREATE TYPE question_status AS ENUM ('pending', 'answered', 'expired');
 -- Nota: o `id` usa o mesmo UUID do auth.users para facilitar RLS
 CREATE TABLE profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE NOT NULL CHECK (LENGTH(username) >= 3 AND username ~ '^[a-z0-9_-]+$'),
     bio TEXT,
     avatar_url TEXT,
-    min_price DECIMAL(10, 2) DEFAULT 10.00,
-    daily_limit INTEGER DEFAULT 10,
+    min_price DECIMAL(10, 2) DEFAULT 10.00 CHECK (min_price >= 1.00),
+    daily_limit INTEGER DEFAULT 10 CHECK (daily_limit BETWEEN 1 AND 100),
     questions_answered_today INTEGER DEFAULT 0,
     referred_by_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     is_admin BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    custom_creator_rate DECIMAL(5, 4),      -- NULL = usa default da plataforma
+    custom_deadline_hours INTEGER,          -- NULL = usa default da plataforma
+    fast_ask_suggestions JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 3. Tabela de Perguntas
@@ -31,7 +36,7 @@ CREATE TABLE questions (
     content TEXT NOT NULL,
     media_url TEXT,
     status question_status DEFAULT 'pending',
-    price_paid DECIMAL(10, 2) NOT NULL,
+    price_paid DECIMAL(10, 2) NOT NULL CHECK (price_paid > 0),
     service_type TEXT NOT NULL DEFAULT 'base',
     is_anonymous BOOLEAN DEFAULT FALSE,
     is_shareable BOOLEAN DEFAULT FALSE,
@@ -39,7 +44,8 @@ CREATE TABLE questions (
     response_text TEXT,
     response_audio_url TEXT,
     answered_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 4. Tabela de Transações
@@ -49,71 +55,26 @@ CREATE TABLE transactions (
     amount DECIMAL(10, 2) NOT NULL,
     status TEXT NOT NULL,
     payment_method TEXT NOT NULL,
-    mp_payment_id TEXT,
+    mp_payment_id TEXT UNIQUE,
     mp_preference_id TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================
--- RLS (Row Level Security)
--- ============================================================
+-- 5. Configurações da Plataforma (Singleton)
+CREATE TABLE platform_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    platform_fee_rate DECIMAL(5, 4) NOT NULL DEFAULT 0.1000,
+    response_deadline_hours INTEGER NOT NULL DEFAULT 36,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+-- Inserir valores padrão da plataforma
+INSERT INTO platform_settings (id, platform_fee_rate, response_deadline_hours)
+VALUES (1, 0.1000, 36)
+ON CONFLICT (id) DO NOTHING;
 
--- profiles: qualquer um pode ler (perfis são públicos)
-CREATE POLICY "Perfis são públicos" ON profiles
-    FOR SELECT USING (true);
-
--- profiles: usuário autenticado pode inserir o próprio perfil
-CREATE POLICY "Criador insere próprio perfil" ON profiles
-    FOR INSERT WITH CHECK (auth.uid() = id);
-
--- profiles: usuário autenticado pode atualizar o próprio perfil
-CREATE POLICY "Criador atualiza próprio perfil" ON profiles
-    FOR UPDATE USING (auth.uid() = id);
-
--- questions: criador vê suas próprias perguntas no dashboard
-CREATE POLICY "Criador vê suas perguntas" ON questions
-    FOR SELECT USING (
-        creator_id IN (SELECT id FROM profiles WHERE id = auth.uid())
-    );
-
--- questions: respostas públicas são visíveis a qualquer um
-CREATE POLICY "Respostas públicas visíveis" ON questions
-    FOR SELECT USING (
-        status = 'answered' AND is_shareable = true
-    );
-
--- questions: qualquer um (inclusive anônimo) pode inserir uma pergunta
--- (inserção acontece via webhook do MP com service role key)
-CREATE POLICY "Webhook insere perguntas" ON questions
-    FOR INSERT WITH CHECK (true);
-
--- questions: criador pode atualizar suas perguntas (para responder)
-CREATE POLICY "Criador responde pergunta" ON questions
-    FOR UPDATE USING (
-        creator_id IN (SELECT id FROM profiles WHERE id = auth.uid())
-    );
-
--- transactions: apenas o criador da pergunta pode ver a transação
-CREATE POLICY "Criador vê suas transações" ON transactions
-    FOR SELECT USING (
-        question_id IN (
-            SELECT id FROM questions
-            WHERE creator_id IN (SELECT id FROM profiles WHERE id = auth.uid())
-        )
-    );
-
--- transactions: inserção via webhook (service role)
-CREATE POLICY "Webhook insere transações" ON transactions
-    FOR INSERT WITH CHECK (true);
-
--- ============================================================
--- Tabela de intenções de pagamento (temporária, limpa após webhook)
--- Vincula o external_reference do MP com os dados da pergunta
--- ============================================================
+-- 6. Tabela de intenções de pagamento (temporária, limpa após webhook)
 CREATE TABLE payment_intents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -123,25 +84,8 @@ CREATE TABLE payment_intents (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- payment_intents: apenas service role acessa (sem políticas públicas)
-ALTER TABLE payment_intents ENABLE ROW LEVEL SECURITY;
-
--- ============================================================
--- Função para resetar questions_answered_today à meia-noite
--- ============================================================
-CREATE OR REPLACE FUNCTION reset_daily_question_counts()
-RETURNS void AS $$
-BEGIN
-    UPDATE profiles SET questions_answered_today = 0;
-END;
-$$ LANGUAGE plpgsql;
-
--- ============================================================
--- Tabela de fila de reembolsos
--- Populada automaticamente pela função expire_pending_questions()
--- Processada pelo endpoint GET /api/refunds/process
--- ============================================================
-CREATE TABLE IF NOT EXISTS refund_queue (
+-- 7. Tabela de fila de reembolsos
+CREATE TABLE refund_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     mp_payment_id TEXT NOT NULL,
@@ -151,13 +95,90 @@ CREATE TABLE IF NOT EXISTS refund_queue (
     processed_at TIMESTAMP WITH TIME ZONE
 );
 
-ALTER TABLE refund_queue ENABLE ROW LEVEL SECURITY;
--- Apenas service role acessa (sem políticas públicas)
+-- ============================================================
+-- ATUALIZAÇÃO AUTOMÁTICA DE TIMESTAMPS (Triggers)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_profiles_updated_at BEFORE UPDATE ON profiles
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trg_questions_updated_at BEFORE UPDATE ON questions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trg_transactions_updated_at BEFORE UPDATE ON transactions
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER trg_platform_settings_updated_at BEFORE UPDATE ON platform_settings
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
 
 -- ============================================================
--- Função para expirar perguntas pendentes após 36h e enfileirar reembolso
--- Chamada a cada 30 minutos via cron
+-- RLS (Row Level Security)
 -- ============================================================
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_intents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE refund_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
+
+-- profiles:
+CREATE POLICY "Perfis são públicos" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Criador insere próprio perfil" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Criador atualiza próprio perfil" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- questions:
+CREATE POLICY "Criador vê suas perguntas" ON questions FOR SELECT USING (creator_id IN (SELECT id FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Respostas públicas visíveis" ON questions FOR SELECT USING (status = 'answered' AND is_shareable = true);
+CREATE POLICY "Webhook insere perguntas" ON questions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Criador responde pergunta" ON questions FOR UPDATE USING (creator_id IN (SELECT id FROM profiles WHERE id = auth.uid()));
+
+-- transactions:
+CREATE POLICY "Criador vê suas transações" ON transactions FOR SELECT USING (question_id IN (SELECT id FROM questions WHERE creator_id IN (SELECT id FROM profiles WHERE id = auth.uid())));
+CREATE POLICY "Webhook insere transações" ON transactions FOR INSERT WITH CHECK (true);
+
+-- platform_settings:
+CREATE POLICY "Service role manages platform_settings" ON platform_settings USING (true) WITH CHECK (true);
+
+-- payment_intents e refund_queue não têm políticas públicas (só service role acessa).
+
+-- ============================================================
+-- STORAGE E BUCKETS
+-- ============================================================
+
+-- Bucket 'responses' para áudios
+INSERT INTO storage.buckets (id, name, public) VALUES ('responses', 'responses', true) ON CONFLICT DO NOTHING;
+CREATE POLICY "Criadores fazem upload de áudio" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'responses' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Áudios são públicos" ON storage.objects FOR SELECT USING (bucket_id = 'responses');
+
+-- Bucket 'avatars' para fotos de perfil
+INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true) ON CONFLICT DO NOTHING;
+CREATE POLICY "Users upload own avatar" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "Users update own avatar" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "Users delete own avatar" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "Avatars publicly readable" ON storage.objects FOR SELECT TO public USING (bucket_id = 'avatars');
+
+-- ============================================================
+-- FUNÇÕES DE ROTINA (CRON E REGRAS ATÔMICAS)
+-- ============================================================
+
+-- Reset diário de question_answered_today
+CREATE OR REPLACE FUNCTION reset_daily_question_counts()
+RETURNS void AS $$
+BEGIN
+    UPDATE profiles SET questions_answered_today = 0;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Expirar perguntas pendentes > 36h e mandar para reembolso
 CREATE OR REPLACE FUNCTION expire_pending_questions()
 RETURNS void AS $$
 DECLARE
@@ -167,8 +188,7 @@ BEGIN
         SELECT q.id, t.mp_payment_id, t.amount
         FROM questions q
         JOIN transactions t ON t.question_id = q.id
-        WHERE q.status = 'pending'
-          AND q.created_at < NOW() - INTERVAL '36 hours'
+        WHERE q.status = 'pending' AND q.created_at < NOW() - INTERVAL '36 hours'
     LOOP
         UPDATE questions SET status = 'expired' WHERE id = expired_question.id;
         INSERT INTO refund_queue (question_id, mp_payment_id, amount)
@@ -177,140 +197,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ============================================================
--- Cron jobs (requerem extensão pg_cron — habilitar no painel Supabase)
--- Painel: Database > Extensions > pg_cron
--- ============================================================
-
--- Habilitar pg_cron (rodar uma vez se não estiver ativo):
--- CREATE EXTENSION IF NOT EXISTS pg_cron;
-
--- Reset diário às 03:00 UTC (meia-noite BRT = UTC-3)
--- SELECT cron.schedule('reset-daily-counts', '0 3 * * *', $$SELECT reset_daily_question_counts()$$);
-
--- Expirar perguntas antigas a cada 30 minutos
--- SELECT cron.schedule('expire-questions', '*/30 * * * *', $$SELECT expire_pending_questions()$$);
-
--- Verificar agendamentos ativos:
--- SELECT * FROM cron.job;
-
--- ============================================================
--- Índices de performance
--- ============================================================
-
-CREATE INDEX IF NOT EXISTS idx_questions_creator_status ON questions(creator_id, status);
-CREATE INDEX IF NOT EXISTS idx_questions_creator_answered_at ON questions(creator_id, answered_at DESC);
-CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
-CREATE INDEX IF NOT EXISTS idx_payment_intents_creator ON payment_intents(creator_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_payment_intents_preference ON payment_intents(mp_preference_id);
-CREATE INDEX IF NOT EXISTS idx_refund_queue_status ON refund_queue(status, created_at);
-
--- Constraint de idempotência: evita transações duplicadas pelo mesmo pagamento MP
-ALTER TABLE transactions ADD CONSTRAINT IF NOT EXISTS transactions_mp_payment_id_unique UNIQUE (mp_payment_id);
-
--- ============================================================
--- CORREÇÕES E MELHORIAS (POST-BETA)
--- ============================================================
-
--- Adicionar is_support_only para distinguir apoios de perguntas
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_support_only BOOLEAN DEFAULT FALSE;
-
--- Adicionar campos updated_at para audit trail
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
-
--- Função para atualizar timestamp automaticamente
-CREATE OR REPLACE FUNCTION update_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Triggers para atualizar updated_at
-CREATE TRIGGER IF NOT EXISTS trg_profiles_updated_at BEFORE UPDATE ON profiles
-FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
-CREATE TRIGGER IF NOT EXISTS trg_questions_updated_at BEFORE UPDATE ON questions
-FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
-CREATE TRIGGER IF NOT EXISTS trg_transactions_updated_at BEFORE UPDATE ON transactions
-FOR EACH ROW EXECUTE FUNCTION update_timestamp();
-
--- ============================================================
--- CONSTRAINTS DE NEGÓCIO
--- ============================================================
-
--- Username: mínimo 3 caracteres, apenas letras/números/underscore/hífen
-ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS username_format
-  CHECK (LENGTH(username) >= 3 AND username ~ '^[a-z0-9_-]+$');
-
--- Min price: mínimo R$ 1.00
-ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS min_price_positive
-  CHECK (min_price >= 1.00);
-
--- Daily limit: entre 1 e 100
-ALTER TABLE profiles ADD CONSTRAINT IF NOT EXISTS daily_limit_range
-  CHECK (daily_limit BETWEEN 1 AND 100);
-
--- Price paid: sempre positivo
-ALTER TABLE questions ADD CONSTRAINT IF NOT EXISTS price_paid_positive
-  CHECK (price_paid > 0);
-
--- ============================================================
--- CLEANUP AUTOMÁTICO DE PAYMENT INTENTS EXPIRADAS
--- ============================================================
-
+-- Cleanup automático de intents pendentes
 CREATE OR REPLACE FUNCTION cleanup_stale_payment_intents()
 RETURNS void AS $$
 BEGIN
-  DELETE FROM payment_intents
-  WHERE created_at < NOW() - INTERVAL '1 day';
+  DELETE FROM payment_intents WHERE created_at < NOW() - INTERVAL '1 day';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ============================================================
--- HABILITAR CRON JOBS (executar após criar extensão pg_cron)
--- ============================================================
-
--- Primeiro, habilitar extensão (uma vez):
--- CREATE EXTENSION IF NOT EXISTS pg_cron;
-
--- Então, agendar jobs:
--- Reset diário às 03:00 UTC (meia-noite BRT = UTC-3)
--- SELECT cron.schedule('reset-daily-counts', '0 3 * * *',
---   $$SELECT reset_daily_question_counts()$$);
-
--- Expirar perguntas antigas a cada 30 minutos
--- SELECT cron.schedule('expire-questions', '*/30 * * * *',
---   $$SELECT expire_pending_questions()$$);
-
--- Limpar payment intents expiradas diariamente às 01:00 UTC
--- SELECT cron.schedule('cleanup-payment-intents', '0 1 * * *',
---   $$SELECT cleanup_stale_payment_intents()$$);
-
--- Verificar agendamentos ativos:
--- SELECT * FROM cron.job;
-
--- ============================================================
--- Função: incremento atômico do contador diário (chamada ao responder pergunta)
--- Rodar no SQL Editor se ainda não existir:
--- ============================================================
+-- Incremento atômico de perguntas respondidas
 CREATE OR REPLACE FUNCTION increment_answered_today(profile_id UUID)
 RETURNS void AS $$
 BEGIN
-  UPDATE profiles SET questions_answered_today = questions_answered_today + 1
-  WHERE id = profile_id;
+  UPDATE profiles SET questions_answered_today = questions_answered_today + 1 WHERE id = profile_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ============================================================
--- Função: verificação atômica do limite diário com lock pessimista
--- Evita race condition quando múltiplos fãs enviam perguntas simultaneamente
--- Conta perguntas já respondidas + payment_intents ativos (em processamento)
--- ============================================================
+-- Verificação atômica de limite diário (evita race conditions no checkout)
 CREATE OR REPLACE FUNCTION can_accept_question(p_creator_id UUID)
 RETURNS boolean AS $$
 DECLARE
@@ -318,51 +221,17 @@ DECLARE
   v_answered_today integer;
   v_pending_intents integer;
 BEGIN
-  -- Lock pessimista: serializa verificações concorrentes para o mesmo criador
-  SELECT daily_limit, questions_answered_today
-  INTO v_daily_limit, v_answered_today
-  FROM profiles
-  WHERE id = p_creator_id
-  FOR UPDATE;
-
-  -- Conta payment_intents ativos nas últimas 2h (pagamentos em andamento)
-  SELECT COUNT(*)
-  INTO v_pending_intents
-  FROM payment_intents
-  WHERE creator_id = p_creator_id
-    AND created_at > NOW() - INTERVAL '2 hours';
-
+  SELECT daily_limit, questions_answered_today INTO v_daily_limit, v_answered_today FROM profiles WHERE id = p_creator_id FOR UPDATE;
+  SELECT COUNT(*) INTO v_pending_intents FROM payment_intents WHERE creator_id = p_creator_id AND created_at > NOW() - INTERVAL '2 hours';
   RETURN (v_answered_today + v_pending_intents) < v_daily_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- Storage: criar bucket 'responses' para áudios
--- (fazer via Dashboard: Storage > New Bucket > "responses" > Public)
--- Ou via SQL:
--- ============================================================
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('responses', 'responses', true)
-ON CONFLICT DO NOTHING;
-
--- Política de storage: criadores fazem upload dos próprios áudios
-CREATE POLICY "Criadores fazem upload de áudio"
-ON storage.objects FOR INSERT
-WITH CHECK (
-    bucket_id = 'responses'
-    AND auth.uid()::text = (storage.foldername(name))[1]
-);
-
--- Política de storage: áudios são públicos para leitura
-CREATE POLICY "Áudios são públicos"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'responses');
-
--- ============================================================
--- MARCOS / CONQUISTAS — Sistema de gamificação para criadores
+-- MARCOS E GAMIFICAÇÃO (ACTIVITY & STATS)
 -- ============================================================
 
--- 5. Tabela de atividade diária (base para streak, sold-out, maratonista)
+-- Tabela de Atividade Diária
 CREATE TABLE daily_activity (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -374,14 +243,10 @@ CREATE TABLE daily_activity (
 );
 
 ALTER TABLE daily_activity ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Atividade diária é pública" ON daily_activity FOR SELECT USING (true);
+CREATE INDEX idx_daily_activity_creator_date ON daily_activity(creator_id, activity_date DESC);
 
-CREATE POLICY "Atividade diária é pública" ON daily_activity
-    FOR SELECT USING (true);
-
-CREATE INDEX idx_daily_activity_creator_date
-    ON daily_activity(creator_id, activity_date DESC);
-
--- 6. Tabela de stats materializados por criador
+-- Tabela de Estatísticas Consolidadas
 CREATE TABLE creator_stats (
     creator_id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
     total_answered INTEGER DEFAULT 0,
@@ -397,11 +262,9 @@ CREATE TABLE creator_stats (
 );
 
 ALTER TABLE creator_stats ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Stats são públicos" ON creator_stats FOR SELECT USING (true);
 
-CREATE POLICY "Stats são públicos" ON creator_stats
-    FOR SELECT USING (true);
-
--- 7. Trigger: atualiza stats quando criador responde uma pergunta
+-- Triggers de Gamificação
 CREATE OR REPLACE FUNCTION update_creator_stats_on_answer()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -417,72 +280,41 @@ DECLARE
     v_marathon_count INTEGER;
     v_soldout_days INTEGER;
 BEGIN
-    IF NEW.status <> 'answered' OR OLD.status = 'answered' THEN
-        RETURN NEW;
-    END IF;
+    IF NEW.status <> 'answered' OR OLD.status = 'answered' THEN RETURN NEW; END IF;
 
     v_today := (NOW() AT TIME ZONE 'America/Sao_Paulo')::DATE;
 
-    -- Upsert daily_activity
     INSERT INTO daily_activity (creator_id, activity_date, questions_answered, was_soldout)
     VALUES (NEW.creator_id, v_today, 1, FALSE)
     ON CONFLICT (creator_id, activity_date)
     DO UPDATE SET questions_answered = daily_activity.questions_answered + 1;
 
-    -- Checar sold-out
     SELECT daily_limit INTO v_daily_limit FROM profiles WHERE id = NEW.creator_id;
-    SELECT questions_answered INTO v_day_answered
-        FROM daily_activity WHERE creator_id = NEW.creator_id AND activity_date = v_today;
+    SELECT questions_answered INTO v_day_answered FROM daily_activity WHERE creator_id = NEW.creator_id AND activity_date = v_today;
     IF v_day_answered >= v_daily_limit THEN
-        UPDATE daily_activity SET was_soldout = TRUE
-            WHERE creator_id = NEW.creator_id AND activity_date = v_today;
+        UPDATE daily_activity SET was_soldout = TRUE WHERE creator_id = NEW.creator_id AND activity_date = v_today;
     END IF;
 
-    -- Aggregates
-    SELECT COUNT(*) INTO v_total_answered FROM questions
-        WHERE creator_id = NEW.creator_id AND status = 'answered';
-    SELECT COUNT(*) INTO v_total_expired FROM questions
-        WHERE creator_id = NEW.creator_id AND status = 'expired';
-    SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (answered_at - created_at)))::BIGINT, 0)
-        INTO v_avg_seconds FROM questions
-        WHERE creator_id = NEW.creator_id AND status = 'answered';
+    SELECT COUNT(*) INTO v_total_answered FROM questions WHERE creator_id = NEW.creator_id AND status = 'answered';
+    SELECT COUNT(*) INTO v_total_expired FROM questions WHERE creator_id = NEW.creator_id AND status = 'expired';
+    SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (answered_at - created_at)))::BIGINT, 0) INTO v_avg_seconds FROM questions WHERE creator_id = NEW.creator_id AND status = 'answered';
 
-    -- Streak
-    SELECT current_streak, max_streak, last_active_date
-        INTO v_streak, v_max_streak, v_last_date
-        FROM creator_stats WHERE creator_id = NEW.creator_id;
+    SELECT current_streak, max_streak, last_active_date INTO v_streak, v_max_streak, v_last_date FROM creator_stats WHERE creator_id = NEW.creator_id;
 
-    IF v_last_date IS NULL OR v_last_date < v_today - 1 THEN
-        v_streak := 1;
-    ELSIF v_last_date = v_today - 1 THEN
-        v_streak := COALESCE(v_streak, 0) + 1;
-    ELSE
-        v_streak := COALESCE(v_streak, 1);
+    IF v_last_date IS NULL OR v_last_date < v_today - 1 THEN v_streak := 1;
+    ELSIF v_last_date = v_today - 1 THEN v_streak := COALESCE(v_streak, 0) + 1;
+    ELSE  v_streak := COALESCE(v_streak, 1);
     END IF;
 
-    IF v_streak > COALESCE(v_max_streak, 0) THEN
-        v_max_streak := v_streak;
-    END IF;
+    IF v_streak > COALESCE(v_max_streak, 0) THEN v_max_streak := v_streak; END IF;
 
-    -- Marathon (dias com 10+ respostas)
-    SELECT COUNT(*) INTO v_marathon_count FROM daily_activity
-        WHERE creator_id = NEW.creator_id AND questions_answered >= 10;
+    SELECT COUNT(*) INTO v_marathon_count FROM daily_activity WHERE creator_id = NEW.creator_id AND questions_answered >= 10;
+    SELECT COUNT(*) INTO v_soldout_days FROM daily_activity WHERE creator_id = NEW.creator_id AND was_soldout = TRUE AND activity_date >= v_today - 30;
 
-    -- Sold-out últimos 30 dias
-    SELECT COUNT(*) INTO v_soldout_days FROM daily_activity
-        WHERE creator_id = NEW.creator_id
-          AND was_soldout = TRUE
-          AND activity_date >= v_today - 30;
-
-    -- Upsert creator_stats
     INSERT INTO creator_stats (
-        creator_id, total_answered, total_received, total_expired,
-        current_streak, max_streak, last_active_date,
-        avg_response_seconds, soldout_days_last30, marathon_count, updated_at
+        creator_id, total_answered, total_received, total_expired, current_streak, max_streak, last_active_date, avg_response_seconds, soldout_days_last30, marathon_count, updated_at
     ) VALUES (
-        NEW.creator_id, v_total_answered, v_total_answered + v_total_expired, v_total_expired,
-        v_streak, v_max_streak, v_today,
-        v_avg_seconds, v_soldout_days, v_marathon_count, NOW()
+        NEW.creator_id, v_total_answered, v_total_answered + v_total_expired, v_total_expired, v_streak, v_max_streak, v_today, v_avg_seconds, v_soldout_days, v_marathon_count, NOW()
     )
     ON CONFLICT (creator_id) DO UPDATE SET
         total_answered = EXCLUDED.total_answered,
@@ -500,89 +332,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER trg_update_stats_on_answer
-    AFTER UPDATE ON questions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_creator_stats_on_answer();
+CREATE TRIGGER trg_update_stats_on_answer AFTER UPDATE ON questions FOR EACH ROW EXECUTE FUNCTION update_creator_stats_on_answer();
 
--- 8. Trigger: atualiza stats quando pergunta expira (para taxa de resposta)
 CREATE OR REPLACE FUNCTION update_creator_stats_on_expire()
 RETURNS TRIGGER AS $$
 DECLARE
     v_total_answered BIGINT;
     v_total_expired BIGINT;
 BEGIN
-    IF NEW.status <> 'expired' OR OLD.status = 'expired' THEN
-        RETURN NEW;
-    END IF;
-
-    SELECT COUNT(*) INTO v_total_answered FROM questions
-        WHERE creator_id = NEW.creator_id AND status = 'answered';
-    SELECT COUNT(*) INTO v_total_expired FROM questions
-        WHERE creator_id = NEW.creator_id AND status = 'expired';
+    IF NEW.status <> 'expired' OR OLD.status = 'expired' THEN RETURN NEW; END IF;
+    SELECT COUNT(*) INTO v_total_answered FROM questions WHERE creator_id = NEW.creator_id AND status = 'answered';
+    SELECT COUNT(*) INTO v_total_expired FROM questions WHERE creator_id = NEW.creator_id AND status = 'expired';
 
     INSERT INTO creator_stats (creator_id, total_answered, total_received, total_expired, updated_at)
     VALUES (NEW.creator_id, v_total_answered, v_total_answered + v_total_expired, v_total_expired, NOW())
-    ON CONFLICT (creator_id) DO UPDATE SET
-        total_expired = EXCLUDED.total_expired,
-        total_received = EXCLUDED.total_received,
-        updated_at = NOW();
-
+    ON CONFLICT (creator_id) DO UPDATE SET total_expired = EXCLUDED.total_expired, total_received = EXCLUDED.total_received, updated_at = NOW();
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER trg_update_stats_on_expire
-    AFTER UPDATE ON questions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_creator_stats_on_expire();
-
--- 9. Backfill: popular daily_activity e creator_stats a partir de dados existentes
--- (rodar UMA VEZ após criar as tabelas acima)
-/*
-INSERT INTO daily_activity (creator_id, activity_date, questions_answered, was_soldout)
-SELECT
-    creator_id,
-    (answered_at AT TIME ZONE 'America/Sao_Paulo')::DATE as activity_date,
-    COUNT(*) as questions_answered,
-    FALSE as was_soldout
-FROM questions
-WHERE status = 'answered' AND answered_at IS NOT NULL
-GROUP BY creator_id, (answered_at AT TIME ZONE 'America/Sao_Paulo')::DATE
-ON CONFLICT (creator_id, activity_date) DO NOTHING;
-
--- Após rodar o INSERT acima, popular creator_stats para cada criador:
-INSERT INTO creator_stats (creator_id, total_answered, total_received, total_expired, avg_response_seconds, marathon_count, updated_at)
-SELECT
-    q.creator_id,
-    COUNT(*) FILTER (WHERE q.status = 'answered') as total_answered,
-    COUNT(*) FILTER (WHERE q.status IN ('answered', 'expired')) as total_received,
-    COUNT(*) FILTER (WHERE q.status = 'expired') as total_expired,
-    COALESCE(AVG(EXTRACT(EPOCH FROM (q.answered_at - q.created_at))) FILTER (WHERE q.status = 'answered')::BIGINT, 0) as avg_response_seconds,
-    (SELECT COUNT(*) FROM daily_activity da WHERE da.creator_id = q.creator_id AND da.questions_answered >= 10) as marathon_count,
-    NOW() as updated_at
-FROM questions q
-GROUP BY q.creator_id
-ON CONFLICT (creator_id) DO UPDATE SET
-    total_answered = EXCLUDED.total_answered,
-    total_received = EXCLUDED.total_received,
-    total_expired = EXCLUDED.total_expired,
-    avg_response_seconds = EXCLUDED.avg_response_seconds,
-    marathon_count = EXCLUDED.marathon_count,
-    updated_at = NOW();
-*/
+CREATE TRIGGER trg_update_stats_on_expire AFTER UPDATE ON questions FOR EACH ROW EXECUTE FUNCTION update_creator_stats_on_expire();
 
 -- ============================================================
--- RPC: Get Top 5 Supporters of the Month (by email grouping)
+-- TOP SUPPORTERS RPC
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION get_top_supporters(p_creator_id UUID)
-RETURNS TABLE (
-  display_name TEXT,
-  is_anonymous BOOLEAN,
-  total_paid DECIMAL,
-  email_hash TEXT
-) AS $$
+RETURNS TABLE (display_name TEXT, is_anonymous BOOLEAN, total_paid DECIMAL, email_hash TEXT) AS $$
 BEGIN
   RETURN QUERY
   SELECT
@@ -591,14 +367,31 @@ BEGIN
     SUM(q.price_paid)::DECIMAL AS total_paid,
     md5(LOWER(TRIM(q.sender_email))) AS email_hash
   FROM questions q
-  WHERE
-    q.creator_id = p_creator_id
-    AND q.status IN ('pending', 'answered')
-    AND q.created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo')
-    AND q.sender_email IS NOT NULL
+  WHERE q.creator_id = p_creator_id AND q.status IN ('pending', 'answered') AND q.created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo') AND q.sender_email IS NOT NULL
   GROUP BY LOWER(TRIM(q.sender_email))
   ORDER BY total_paid DESC
   LIMIT 5;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ============================================================
+-- ÍNDICES DE PERFORMANCE
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_questions_creator_status ON questions(creator_id, status);
+CREATE INDEX IF NOT EXISTS idx_questions_creator_answered_at ON questions(creator_id, answered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_creator ON payment_intents(creator_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_preference ON payment_intents(mp_preference_id);
+CREATE INDEX IF NOT EXISTS idx_refund_queue_status ON refund_queue(status, created_at);
+
+-- ============================================================
+-- AGENDAMENTO DE CRON JOBS (PG_CRON)
+-- Exige extensão pg_cron habilitada no painel Supabase
+-- ============================================================
+
+-- CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+-- SELECT cron.schedule('reset-daily-counts', '0 3 * * *', $$SELECT reset_daily_question_counts()$$);
+-- SELECT cron.schedule('expire-questions', '*/30 * * * *', $$SELECT expire_pending_questions()$$);
+-- SELECT cron.schedule('cleanup-payment-intents', '0 1 * * *', $$SELECT cleanup_stale_payment_intents()$$);

@@ -1,322 +1,116 @@
-# VOXA — Guia para Desenvolvimento
+# VOXA — Guia de Arquitetura e Desenvolvimento
 
-## O que é o projeto
-
-**VOXA** é uma plataforma de monetização para criadores de conteúdo (influencers) no mercado brasileiro. Fãs pagam para enviar perguntas a criadores com garantia de resposta em até 36 horas. O criador responde via texto ou áudio. A plataforma cobra 10% de taxa sobre cada transação.
-
-**Status atual:** Beta funcional — autenticação, banco e pagamentos integrados. **Deployado em produção no Render.com.** Pronto para onboarding de influencers reais.
+Este é o documento principal de referência (fonte da verdade) para qualquer inteligência artificial ou desenvolvedor trabalhando no repositório **VOXA**.
 
 ---
 
-## Stack
+## 📌 Visão Geral do Projeto
 
-| Camada | Tecnologia |
-|---|---|
-| Frontend | Next.js 14.1 (App Router), React 18, TypeScript 5 |
-| Estilo | Tailwind CSS 3.3, gradiente Instagram customizado |
-| Ícones | Lucide React |
-| Auth | Supabase Auth (Google OAuth apenas — email magic link removido) |
-| Banco | PostgreSQL via Supabase |
-| ORM | Schema em `database/schema.prisma` (referência) — queries via Supabase JS SDK |
-| Pagamentos | Mercado Pago (Checkout Pro — PIX + cartão) |
-| Storage | Supabase Storage (bucket `responses` para áudios) |
-| Screenshots | html2canvas (geração de Stories) |
-| Package manager | npm |
+**VOXA** é uma plataforma de monetização onde fãs podem fazer perguntas pagas ou enviar apoio financeiro direto a criadores de conteúdo. O criador tem até 36 horas para responder (em texto ou áudio) às perguntas.
+
+- **Stack Principal:** Next.js 14.1 (App Router), React 18, TypeScript, Tailwind CSS.
+- **Backend & Auth:** Supabase (Auth via Google OAuth, PostgreSQL com Row Level Security, Storage para áudios).
+- **Pagamentos:** Mercado Pago (Checkout Pro - PIX e Cartão de crédito).
+- **Infra e Deploy:** Render.com (produção) com Webhooks HTTPS.
 
 ---
 
-## Estrutura de diretórios
+## 📂 Estrutura de Diretórios
 
-```
+```text
 voxa/
-├── CLAUDE.md                          # Este arquivo
-├── README.md                          # Guia de setup para desenvolvedores
-├── .gitignore
-├── plans/                             # Documentos de planejamento (não sobe ao Git)
-├── database/
-│   ├── schema.prisma                  # Schema completo (fonte de verdade)
-│   ├── schema.sql                     # SQL equivalente (referência)
-│   └── supabase_setup.sql             # SQL COMPLETO para rodar no Supabase (tabelas + RLS + storage)
-└── frontend/
-    ├── src/
-    │   ├── middleware.ts               # Proteção de rotas (/dashboard, /setup, /admin)
-    │   ├── lib/
-    │   │   ├── supabase/server.ts      # Client Supabase para Server Components e API Routes
-    │   │   ├── supabase/client.ts      # Client Supabase para Client Components
-    │   │   ├── constants.ts            # CREATOR_NET_RATE, RESPONSE_DEADLINE_HOURS
-    │   │   ├── admin.ts                # getAdminUser() — verifica is_admin no perfil
-    │   │   ├── email.ts                # sendResponseNotification() via Resend (pós-beta)
-    │   │   └── milestones.ts           # computeMilestones() — lógica de marcos/badges
-    │   └── app/
-    │       ├── layout.tsx
-    │       ├── page.tsx                # Landing page (light theme)
-    │       ├── globals.css
-    │       ├── auth/callback/route.ts  # Callback OAuth → /setup ou /dashboard
-    │       ├── login/page.tsx          # Login Google OAuth
-    │       ├── setup/page.tsx          # Onboarding do criador (username, bio, preço, limite)
-    │       ├── vender/page.tsx         # Marketing + simulador de ganhos
-    │       ├── dashboard/
-    │       │   ├── page.tsx            # Client Component — perguntas pendentes + métricas + marcos
-    │       │   ├── QuestionList.tsx    # Client Component — resposta texto/áudio, Story modal, iOS fallback
-    │       │   ├── MilestoneProgress.tsx  # Client Component — barra de progresso de marcos
-    │       │   ├── history/
-    │       │   │   ├── page.tsx        # Server Component — histórico paginado + métricas de ganhos
-    │       │   │   └── VisibilityToggle.tsx  # Client Component — toggle is_shareable otimista
-    │       │   ├── settings/page.tsx   # Client Component — bio, preço, limite, avatar, Fast Ask
-    │       │   └── referral/page.tsx   # UI pronta — backend pós-beta
-    │       ├── perfil/[username]/
-    │       │   ├── page.tsx            # Server Component — perfil + feed público + top supporters + marcos
-    │       │   └── QuestionForm.tsx    # Client Component — modo Pergunta e modo Apoio + redirect MP
-    │       ├── admin/
-    │       │   ├── layout.tsx          # Layout admin (verifica is_admin)
-    │       │   ├── page.tsx            # Dashboard admin — visão geral
-    │       │   ├── settings/page.tsx   # Configurações da plataforma (taxa, prazo)
-    │       │   └── creators/
-    │       │       ├── page.tsx        # Lista de criadores
-    │       │       └── [id]/
-    │       │           ├── page.tsx    # Detalhes do criador
-    │       │           ├── BanToggle.tsx       # Ban/unban criador
-    │       │           ├── RefundButton.tsx    # Reembolso manual
-    │       │           └── CreatorParamsForm.tsx # Taxa e prazo customizados
-    │       └── api/
-    │           ├── questions/
-    │           │   ├── route.ts        # POST (legado — não usado no fluxo de pagamento)
-    │           │   ├── [id]/route.ts   # PATCH — responde pergunta (texto ou URL de áudio)
-    │           │   └── visibility/route.ts  # PATCH — alterna is_shareable
-    │           ├── payment/
-    │           │   ├── create-preference/route.ts  # Cria preferência MP + salva payment_intent
-    │           │   └── webhook/route.ts            # Confirma MP → salva question (HMAC + reembolso automático)
-    │           ├── refunds/
-    │           │   └── process/route.ts  # GET protegido — fila de reembolsos (cron externo, desabilitado)
-    │           └── admin/
-    │               ├── platform-settings/route.ts  # GET/PATCH — taxa e prazo globais
-    │               ├── refunds/route.ts             # POST — reembolso manual pelo admin
-    │               └── creators/
-    │                   ├── [id]/route.ts            # PATCH — ban/unban criador
-    │                   └── [id]/params/route.ts     # PATCH — taxa e prazo individuais
-    ├── .env.local                      # Credenciais reais (NÃO commitar)
-    ├── .env.example                    # Template documentado
-    ├── next.config.mjs
-    ├── tailwind.config.ts
-    ├── tsconfig.json
-    └── package.json
+├── CLAUDE.md                   # Este arquivo (Sempre leia antes de alterar a arquitetura)
+├── README.md                   # Instruções de setup para desenvolvedores locais
+├── database/                   # Schema e definições do Supabase
+│   ├── schema.prisma           # Schema para facilitar visualização dos relacionamentos
+│   └── supabase_setup.sql      # Script oficial completo (Tabelas, RLS, Functions, Triggers)
+├── frontend/                   # Aplicação Web (Next.js)
+│   ├── src/app/
+│   │   ├── admin/              # Painel de administração da plataforma (protegido)
+│   │   ├── api/                # Rotas de API (cron, webhooks de payment, refunds, questions)
+│   │   ├── auth/               # Callback do Google OAuth
+│   │   ├── dashboard/          # Painel do Criador (perguntas, milestones, configurações)
+│   │   ├── perfil/[username]/  # Perfil público do criador (formulário de pagamento e feed)
+│   │   ├── setup/              # Onboarding inicial do criador
+│   │   └── vender/ & join/     # Landing pages e fluxos de marketing
+│   └── src/lib/                # Regras de Negócio e Clientes
+│       ├── supabase/           # Clientes Supabase SSR (client, server, admin)
+│       ├── email.ts            # Integração Resend (envio de emails)
+│       ├── milestones.ts       # Sistema de gamificação e marcos dos criadores
+│       └── cropImage.ts        # Utilitário para corte de Avatar (react-easy-crop)
+└── plans/                      # Histórico de planejamento de tarefas e checklists
 ```
 
 ---
 
-## Banco de dados
+## 🏗️ Modelagem de Dados (Supabase)
 
-**`database/supabase_setup.sql`** é o arquivo definitivo para configurar o Supabase do zero.
+O banco de dados é gerido inteiramente no Supabase. O arquivo oficial é `database/supabase_setup.sql`.
 
-### Tabelas principais
+### Entidades Principais
+1. **`profiles`**: Dados dos criadores (username, bio, limites diários, avatar_url, taxas customizadas).
+2. **`questions`**: Armazena as perguntas ou apoios.
+   - `status`: `pending` (aguardando resposta), `answered` (respondida) ou `expired` (não respondida em 36h).
+   - `is_support_only`: Se for `true`, indica apenas um "Apoio" (doação). Não exige resposta e o criador não perde limite de tempo. É persistido já como `answered`.
+3. **`transactions`**: Registro do pagamento atrelado a uma pergunta e ID do Mercado Pago.
+4. **`payment_intents`**: Tabela temporária para evitar perda de dados durante o redirecionamento do checkout MP.
+5. **`daily_activity` & `creator_stats`**: Utilizadas para o cálculo dos *Milestones* (marcos de atividade, dias de "sold out", streaks de dias respondendo).
 
-| Tabela | Campos relevantes |
-|---|---|
-| `profiles` | username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_admin, is_active, custom_creator_rate, custom_deadline_hours, fast_ask_suggestions, referred_by_id |
-| `questions` | content, sender_name, sender_email, price_paid, service_type, is_anonymous, is_shareable, **is_support_only**, status, response_text, response_audio_url, answered_at |
-| `transactions` | amount, status, payment_method, mp_payment_id, mp_preference_id |
-| `payment_intents` | Temporária — dados da pergunta durante fluxo de pagamento (limpa após webhook) |
-| `refund_queue` | Fila de reembolsos automáticos |
-| `platform_settings` | Singleton — taxa da plataforma e prazo de resposta global |
-| `creator_stats` | Estatísticas acumuladas por criador (total ganho, perguntas respondidas, etc.) |
-| `daily_activity` | Atividade diária por criador (para gráficos e milestones) |
-
-### Status do campo `questions.status`
-- `pending` — pagamento confirmado, aguardando resposta do criador
-- `answered` — criador respondeu (ou apoio recebido — criado já neste estado)
-- `expired` — expirou sem resposta (reembolso)
-
-### Campo `questions.is_support_only`
-- `false` — pergunta normal (sujeita ao prazo de 36h e reembolso automático)
-- `true` — apoio do fã (criado já como `answered`, sem exigir resposta, sem reembolso, não aparece no feed público)
-
-### Funções SQL necessárias (rodar no SQL Editor)
-```sql
--- Incremento atômico do contador diário
-CREATE OR REPLACE FUNCTION increment_answered_today(profile_id UUID)
-RETURNS void AS $$
-BEGIN
-  UPDATE profiles SET questions_answered_today = questions_answered_today + 1
-  WHERE id = profile_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-### Migration para banco existente
-```sql
--- Rodar se o banco foi criado antes de 2026-03-19
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_support_only BOOLEAN DEFAULT FALSE;
-```
+### Políticas de Segurança (RLS - Row Level Security)
+- Perfis (`profiles`), feed de respostas públicas (`questions` com `is_shareable = true`, status `answered`) e estatísticas (`creator_stats`) são **públicos para leitura**.
+- Criadores **só podem ler e atualizar seus próprios** dados, perguntas pendentes e transações.
+- Rotas como Webhooks e Cron Jobs utilizam a `SUPABASE_SERVICE_ROLE_KEY` bypassando o RLS.
 
 ---
 
-## Fluxo de pagamento
+## 💳 Fluxos de Pagamento e Funcionalidades Core
 
-### Modo Pergunta (padrão)
-```
-Fã acessa /perfil/[username]
-  → preenche formulário (modo "Fazer Pergunta") → clica "Pagar"
-  → POST /api/payment/create-preference
-      → valida daily_limit via can_accept_question()
-      → salva payment_intent (question_data + is_support_only=false)
-      → cria Preference MP → retorna init_point
-  → redirect para checkout Mercado Pago
-  → fã paga → MP chama POST /api/payment/webhook
-      → HMAC verificado → busca payment_intent
-      → re-valida daily_limit (race condition protection)
-        → se limite atingido: PaymentRefund imediato + deleta intent
-      → cria question (status='pending') + transaction
-      → deleta payment_intent
-  → MP redireciona para /perfil/[username]?payment_status=approved
-```
+### 1. Fluxo "Fazer Pergunta" (Garantia de Resposta)
+1. Fã acessa `/perfil/[username]`.
+2. O sistema faz validação atômica se o criador pode receber novas perguntas (RPC `can_accept_question` evita **race conditions** de limite diário).
+3. Post via `/api/payment/create-preference` cria intenção de pagamento no banco (`payment_intents`) e Preference no Mercado Pago.
+4. Fã é redirecionado, paga e o MP bate no Webhook `/api/payment/webhook`.
+5. Webhook usando validação HMAC aprova, move os dados de `payment_intents` para `questions` (pending) e `transactions`. Se o limite do criador houver estourado no meio tempo, faz `Refund` imediato.
 
-### Modo Apoio ("Apenas Apoiar")
-```
-Fã escolhe "Apenas Apoiar" no formulário
-  → POST /api/payment/create-preference (is_support_only=true)
-  → webhook cria question com:
-      status='answered', answered_at=now, response_text='❤️ Apoio recebido!'
-      is_support_only=true, is_shareable=false
-  → pergunta NUNCA aparece no dashboard do criador nem no feed público
-  → fã não tem garantia de resposta (UI avisa: "Sem obrigação de resposta")
-```
+### 2. Fluxo "Apoio"
+Mesmo fluxo acima, porém `is_support_only = true`. A pergunta cai no webhook, é salva  imediatamente como `answered`, e nunca exige resposta do criador.
+
+### 3. Resposta e Compartilhamento
+- O criador responde via Texto ou Áudio (gravado localmente via `MediaRecorder` com envio ao Supabase Storage no bucket `responses`).
+- Compartilhamento no Instagram Stories via componente customizado que usa `html2canvas` renderizando as cores da plataforma (escala 3x HD).
 
 ---
 
-## Fluxo de resposta do criador
+## ⏱️ Cron Jobs (Rotinas Automáticas)
 
-```
-Criador acessa /dashboard
-  → vê perguntas pendentes (status='pending', is_support_only=false)
-  → Texto: digita resposta → PATCH /api/questions/[id]
-  → Áudio: grava via MediaRecorder → upload Supabase Storage (bucket responses)
-          → obtém URL pública → PATCH /api/questions/[id] com response_audio_url
-  → pergunta some do dashboard (remoção otimista)
-  → resposta aparece em /perfil/[username] se is_shareable=true E is_support_only=false
-```
+A aplicação conta com endpoints em `/api/cron/` para a infraestrutura de CRON (ex: pg_cron do Supabase ou Cron Vercel/Render):
+- **`GET /api/cron/reset-daily`**: Reseta os limites diários de perguntas à meia-noite.
+- **`GET /api/cron/expire-questions`**: Varre respostas `pending` há mais de 36 horas, marca como `expired` e envia para fila de `refund_queue`.
+- **`GET /api/cron/cleanup-intents`**: Deleta carrinhos (payment_intents) velhos e não concluídos.
 
 ---
 
-## Variáveis de ambiente
+## 🎨 Sistema de Design e UI
 
-Arquivo: `frontend/.env.local` — ver `frontend/.env.example`.
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=        # Server-side apenas (webhook, admin routes)
-
-MP_ACCESS_TOKEN=                  # TEST-... sandbox | APP_USR-... produção
-NEXT_PUBLIC_MP_PUBLIC_KEY=        # Não utilizado no fluxo atual (Checkout Pro)
-
-NEXT_PUBLIC_APP_URL=              # http://localhost:3000 | https://dominio.com
-
-MP_WEBHOOK_SECRET=                # Painel MP > Webhooks > Secret
-REFUND_SECRET=                    # Token para /api/refunds/process (string aleatória)
-
-FEATURE_REFUNDS_ENABLED=false     # Habilitar quando cron job estiver configurado
-```
+- **Tailwind customizado**: Utiliza variáveis modernas em `globals.css` (ex: `--gradient-instagram`).
+- Sem uso de bibliotecas de componentes externas pesadas além do essencial (Radix UI esporádico ou Lucide React para ícones).
+- UX rica: Crop de imagem no setup (`react-easy-crop`), *skeleton loaders* para carregamentos otimistas e feedback instantâneo no formulário de pagamentos.
 
 ---
 
-## Design system
+## 🛠️ Regras de Desenvolvimento e Padrões de Código
 
-- **Tema:** Dark-first com gradiente Instagram (`#F58529` → `#DD2A7B` → `#8134AF`)
-- **Perfil e login:** fundo `#0A0A0F`, cards `#12121A`
-- **Dashboard:** fundo claro com cards `rounded-2xl border border-gray-100`
-- **Landing page:** light theme com acentos do gradiente
-- **Botões primários:** `bg-gradient-instagram`
-- **Tailwind custom:** `bg-gradient-instagram`, `text-gradient-instagram`, `bg-gradient-story` definidos em `globals.css` e `tailwind.config.ts`
-- **Idioma:** Português do Brasil (pt-BR)
-
----
-
-## Convenções de código
-
-- **Server vs Client:** Server Components para fetch de dados; `'use client'` apenas para interatividade
-- **Supabase regular:** `lib/supabase/server.ts` em Server Components; `lib/supabase/client.ts` em Client Components
-- **Supabase admin:** `createClient(@supabase/supabase-js)` com `SUPABASE_SERVICE_ROLE_KEY` apenas em API Routes server-side (webhook, admin/*, questions/[id])
-- **Componentes:** Funcionais com TypeScript, sem CSS modules — Tailwind inline
-- **Roteamento:** Next.js App Router exclusivamente
+1. **App Router e Componentes Server/Client:**
+   - Default para **Server Components** pre-fetching dados com `@supabase/ssr`.
+   - Use `"use client"` estritamente na árvore visual ou onde há React Hooks/Estado (ex: Player de Áudio, MediaRecorder e Crop de Imagens).
+2. **Cuidado com Env Vars:**
+   - NUNCA exponha a `SUPABASE_SERVICE_ROLE_KEY` ou chaves privadas do Mercado Pago (`MP_WEBHOOK_SECRET`) no Client. Restrinja-os à pasta `api/`.
+3. **Padrão de Retorno nas APIs:**
+   - Centralize o instanciamento do banco na pasta `src/lib/supabase` (nunca recrie conectores globalmente na API de forma impura).
+4. **Verificações de Segurança:**
+   - Webhooks devem sempre validar a integridade da requisição (`x-signature` HMAC no Mercado Pago).
+   - Ações de **Admin** no painel validam a flag `is_admin = true` da sessão ativa.
 
 ---
 
-## Comandos
-
-```bash
-cd frontend && npm install        # Instalar dependências
-cd frontend && npm run dev        # Desenvolvimento (http://localhost:3000)
-cd frontend && npm run build      # Build de produção
-cd frontend && npm run lint       # Lint
-
-# Testar webhook localmente
-ngrok http 3000                   # Expor porta para MP (só em dev)
-```
-
----
-
-## Configuração Supabase (checklist)
-
-- [x] Rodar `database/supabase_setup.sql` no SQL Editor
-- [x] Rodar função `increment_answered_today` no SQL Editor
-- [x] Rodar migration `is_support_only` se banco já existia (ver seção Banco de dados)
-- [x] Authentication > Providers > Google: ativar com Client ID + Secret
-- [x] Authentication > URL Configuration: Site URL + Redirect URLs (`/auth/callback`)
-- [x] Storage > bucket `responses`: criar como público
-- [ ] pg_cron: agendar reset diário de `questions_answered_today` (requer plano pago)
-
-## Configuração Mercado Pago (checklist)
-
-- [x] Criar aplicação em developers.mercadopago.com
-- [x] Copiar Access Token e Public Key para variáveis de ambiente
-- [x] Configurar webhook: URL `{APP_URL}/api/payment/webhook`, evento `payments`
-- [ ] Confirmar uso de credenciais de produção (`APP_USR-...`) vs teste (`TEST-...`)
-
----
-
-## Deploy — Render.com
-
-A aplicação está hospedada no **Render.com** (não Vercel).
-
-- **Auth callback:** `NEXT_PUBLIC_APP_URL` corrige o redirect pós-OAuth (evita loop com proxy reverso do Render que expõe `localhost:10000` internamente)
-- **Story HD:** `html2canvas` com `scale: 3` + download via Blob em memória
-- **Webhook MP:** URL de produção do Render configurada no painel do MP
-- **Admin panel:** acessível em `/admin` — requer `is_admin=true` no perfil (setar manualmente no Supabase)
-
-> Ver `plans/2026-03-13-render-deploy.md` para o guia completo de setup.
-
----
-
-## Status das funcionalidades
-
-| Funcionalidade | Status | Observação |
-|---|---|---|
-| Landing page + marketing (/vender) | ✅ | |
-| Login Google OAuth | ✅ | Email removido |
-| Onboarding do criador (/setup) | ✅ | |
-| Proteção de rotas (middleware) | ✅ | |
-| Perfil público com dados reais | ✅ | |
-| Pagamento — Pergunta (PIX + cartão) | ✅ | |
-| Pagamento — Modo Apoio | ✅ | Sem exigência de resposta |
-| Reembolso automático (limite diário) | ✅ | PaymentRefund imediato no webhook |
-| Dashboard com perguntas + métricas | ✅ | |
-| Resposta por texto | ✅ | |
-| Resposta por áudio (MediaRecorder) | ✅ | Fallback iOS Safari ativo |
-| Story HD (html2canvas Scale 3x) | ✅ | |
-| Feed de respostas públicas | ✅ | Filtra apoios (is_support_only=false) |
-| Top supporters no perfil | ✅ | RPC get_top_supporters |
-| Marcos e badges de criadores | ✅ | computeMilestones() |
-| Edição de perfil + Fast Ask | ✅ | |
-| Histórico de respostas + ganhos | ✅ | Paginado, filtros por período |
-| Controle de visibilidade | ✅ | Toggle otimista |
-| Perfil de exemplo (/perfil/exemplo) | ✅ | |
-| Admin panel | ✅ | Ban, taxa custom, reembolso manual |
-| Configurações da plataforma (admin) | ✅ | Taxa e prazo globais |
-| Deploy (Render.com) | ✅ | |
-| Webhook HMAC verificado | ✅ | |
-| Reset diário automático (cron) | ⚠️ | pg_cron não configurado — reset manual necessário |
-| Expiração de perguntas após 36h | ⚠️ | Código pronto — desabilitado (requer cron) |
-| Fila de reembolsos automáticos | 🚩 | FEATURE_REFUNDS_ENABLED=false |
-| Notificações por email | ⏳ | Pós-beta (Resend instalado) |
-| Programa de afiliados | ⏳ | UI pronta, backend pós-beta |
-| Resposta por vídeo | ⏳ | Pós-beta |
+> **Antes de qualquer refatoração profunda:** Releia os scripts SQL em `database/supabase_setup.sql`. As regras de negócios pesadas (estatísticas, sold out, top supporters) estão desenhadas via Triggers e RPCs no banco de dados para extrema performance, evite reimplementar esses contadores no Server Next.js.
