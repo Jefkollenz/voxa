@@ -1,59 +1,61 @@
 # VOXA 🎙️
 
-**VOXA** é uma plataforma de monetização para criadores de conteúdo (influencers) no mercado brasileiro. A plataforma permite que os fãs paguem para enviar perguntas ou mensagens de apoio (suporte) aos criadores, com garantia de resposta (em texto ou áudio) em até 36 horas para as perguntas. A plataforma cobra uma taxa sobre cada transação.
+**VOXA** é uma plataforma de monetização para criadores de conteúdo (influencers) no mercado brasileiro. A plataforma permite que os fãs paguem para enviar perguntas ou mensagens de apoio aos criadores, com garantia de resposta em texto, áudio ou vídeo em até 36 horas. A plataforma atua tanto na Web quanto via Aplicativo Mobile.
 
-![Status](https://img.shields.io/badge/Status-Beta-blue)
+![Status](https://img.shields.io/badge/Status-Produção_&_Beta_Mobile-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-14.1-black)
-![React](https://img.shields.io/badge/React-18-blue)
+![React Native](https://img.shields.io/badge/React_Native-Expo-blue)
 ![Supabase](https://img.shields.io/badge/Supabase-Database-3ecf8e)
 
 ## 🚀 Funcionalidades
 
 - **Autenticação:** Login social via Google OAuth (Supabase Auth).
-- **Perfis Customizáveis:** Bio, avatar, preço mínimo por resposta, limites diários e link customizado (`/perfil/username`).
-- **Painel do Criador:** Gerenciamento de perguntas pendentes, métricas de ganhos, hitórico paginado e barra de progresso de marcos (milestones).
-- **Respostas:** Suporte a respostas em texto ou áudio (via MediaRecorder e Supabase Storage).
-- **Modo Apoio:** Fãs podem enviar pagamentos de contribuição sem exigir uma resposta rápida ("Apenas Apoiar").
-- **Integração de Pagamentos:** Mercado Pago (Checkout Pro - PIX e Cartão de Crédito) com Webhooks verificados por assinaturas HMAC.
-- **Reembolsos Automáticos:** Caso o limite diário seja alcançado durante concorrência de pagamentos.
-- **Compartilhamento Social:** Geração de imagens otimizadas para Stories do Instagram (via html2canvas).
-- **Painel Admin:** Gerenciamento de criadores (banimentos, taxas customizadas), gerenciamento da taxa global de uso e controle de prazos.
+- **Perfis Premium:** Dark mode exclusivo, bio, avatar, preço mínimo por resposta, limites diários e link customizado (`/perfil/username`).
+- **Dashboard do Criador:** Gerenciamento de perguntas, métricas financeiras detalhadas, histórico paginado e gamificação (marcos/milestones, sequências).
+- **Múltiplos Formatos:** Respostas via texto, áudio (via MediaRecorder e Supabase Storage) ou upload de vídeos curtos.
+- **Modo Apoio:** Fãs podem enviar pagamentos de contribuição sem exigir resposta do criador.
+- **Aplicativo Mobile:** Versão nativa (Android/iOS) embrulhada em React Native WebView para acesso otimizado.
+- **Integração de Pagamentos:** Mercado Pago (PIX e Cartão de Crédito) com Webhooks verificados por assinaturas HMAC.
+- **Reembolsos Automáticos:** Acionados por Cron Jobs caso o prazo de 36h vença sem resposta do criador.
+- **Painel Admin:** Gerenciamento centralizado de usuários, configuração de taxas da plataforma nativas do Supabase, gestão de bugs e painel de análise.
 
 ## 🛠️ Stack Tecnológico
 
-- **Frontend:** Next.js 14.1 (App Router), React 18, TypeScript 5.
-- **Estilização:** Tailwind CSS 3.3 com tema customizado (dark-first, gradientes baseados no Instagram) e Lucide React (Ícones).
-- **Backend, Banco de Dados & Storage:** Supabase (Auth, PostgreSQL RLS, Storage de Áudios).
+- **Frontend Web:** Next.js 14.1 (App Router), React 18, TypeScript, Tailwind CSS (Design Mobile-First).
+- **Frontend Mobile:** React Native com Expo, utilizando react-native-webview. Builds cloud gerenciadas pelo EAS (Expo Application Services).
+- **Backend & BD:** Supabase (Auth, PostgreSQL com RLS Meticuloso, Storage e Cron Jobs).
 - **Pagamentos:** Checkout do Mercado Pago.
-- **Hospedagem / Deploy:** Render.com.
+- **Hospedagem / Deploy:** Render.com (Web) e EAS (Mobile APK/IPA).
 
 ## 📦 Estrutura do Projeto
 
 ```text
 voxa/
-├── CLAUDE.md                   # Guia detalhado de arquitetura e funcionamento interno
-├── README.md                   # Este arquivo (guia de setup)
-├── frontend/                   # Aplicação Next.js (Interface e rotas Server-Side)
-│   ├── src/app/                # Rotas App Router (páginas, APIs de webhook, admin)
+├── CLAUDE.md                   # Guia detalhado de arquitetura (Leitura Obrigatória)
+├── README.md                   # Este arquivo (Visão geral e setup)
+├── frontend/                   # Aplicação Next.js Core (Interface e lógicas de servidor)
+│   ├── src/app/                # Rotas App Router (dash, admin, setup, webhooks)
 │   ├── src/lib/                # Utilitários (Supabase clients, MercadoPago)
-│   ├── public/                 # Assets (imagens, favicon, etc)
-│   └── package.json            # Dependências gerenciadas pelo NPM
-├── database/                   # Definições do banco de dados (tabelas, policies, functions)
-│   ├── schema.prisma           # Schema auxiliar para visibilidade (referência)
-│   └── supabase_setup.sql      # Script completo para setup no Supabase
-└── plans/                      # Documentação de rastreio de tarefas do projeto
+│   ├── src/components/         # Componentes React reutilizáveis
+│   └── public/                 # Assets (imagens, favicon, etc)
+├── mobile/                     # Aplicativo Expo React Native (Wrapper WebView)
+│   ├── App.tsx                 # Entrada principal contendo o WebView apontando para o app web
+│   ├── app.json & eas.json     # Configurações de Build para lojas Android/iOS
+│   └── assets/                 # Ícones nativos e splash screens
+├── database/                   # Definições do banco de dados (BD Fonte de Verdade)
+│   ├── schema.prisma           # Prisma Schema apenas visual (referencial)
+│   └── supabase_setup.sql      # Script completo executável no Supabase SQL Editor
+└── plans/                      # Histórico de planejamento de tarefas
 ```
 
-## 🏗️ Pré-requisitos
-
-Para rodar o projeto localmente, tenha na sua máquina:
+## 🏗️ Pré-requisitos (Desenvolvimento Local)
 
 - Node.js `18.x` ou versão superior
-- NPM
-- Uma conta no [Supabase](https://supabase.com/)
-- Conta de vendedor/desenvolvedor no [Mercado Pago](https://www.mercadopago.com.br/developers)
+- Uma conta no [Supabase](https://supabase.com/) e cli (opcional)
+- Conta no [Mercado Pago Developer](https://www.mercadopago.com.br/developers)
+- Conta [Expo](https://expo.dev) e EAS CLI instalado (`npm i -g eas-cli`) para lidar com builds Mobile.
 
-## ⚙️ Instalação e Configuração Local
+## ⚙️ Instalação e Configuração
 
 ### 1. Clonar o repositório
 ```bash
@@ -61,71 +63,27 @@ git clone https://github.com/seu-usuario/voxa.git
 cd voxa
 ```
 
-### 2. Instalar dependências Frontend
+### 2. Frontend Web
 ```bash
 cd frontend
 npm install
 ```
+Configure as variáveis em `frontend/.env.local` usando seu Supabase e Mercado Pago (veja `.env.example`).
+Inicie a web com: `npm run dev`
 
-### 3. Configuração do Supabase
-1. Crie um novo projeto no Supabase.
-2. Acesse a seção **SQL Editor** do projeto e execute o conteúdo de `database/supabase_setup.sql` para criar todo o banco. Isto iniciará seu esquema, Storage (bucket de audios) e suas RLS Policies.
-3. Não esqueça de verificar a existência de `increment_answered_today` para incrementar estatísticas.
-4. Vá em **Authentication > Providers** e ative o provider **Google** com seu Client ID e Secret.
-5. Adicione sua URL em *Authentication > URL Configuration > Redirect URLs* (ex: `http://localhost:3000/auth/callback`).
-
-### 4. Variáveis de Ambiente
-Crie um arquivo `.env.local` na pasta `frontend/`, copiando as informações de `.env.example`:
-
+### 3. Aplicativo Mobile
 ```bash
-cp .env.example .env.local
+cd mobile
+npm install
 ```
+Inicie no simulador: `npx expo start`
+*(Nota: O mobile busca a versão em produção do app `askvoxa.com` por padrão. Para testar o app nativo no localhost, altere o endpoint no App.tsx temporariamente, mas retorne antes do commit.)*
 
-Complete as variáveis obrigatórias:
-
-```env
-# Banco de Dados Supabase (obtenha nas settings > API do seu projeto Supabase)
-NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
-SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
-
-# Mercado Pago (obtenha na seção "Suas integrações" no portal devs MP)
-MP_ACCESS_TOKEN=TEST-xxxxxxxx # Recomendado focar no accessToken de Teste inicialmente
-MP_WEBHOOK_SECRET=sua_secret_de_webhook
-NEXT_PUBLIC_MP_PUBLIC_KEY=sua_public_key
-
-# Aplicação Base
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-REFUND_SECRET=texto_seguro_arbitrario_exemplo
-FEATURE_REFUNDS_ENABLED=false
-```
-
-### 5. Webhooks Locais do Mercado Pago
-Para simular transações pagas com o Mercado Pago na sua máquina, exponha sua porta local usando o `ngrok`:
-
-```bash
-# Terminal 1: Iniciar Next.js
-npm run dev
-
-# Terminal 2: Ngrok
-ngrok http 3000
-```
-Pegue a URL pública fornecida pelo `ngrok` (ex `https://1a2b-3c.ngrok-free.app`), vá ao painel de Webhooks do Mercado Pago, configure para disparar no path `/api/payment/webhook` para eventos de **pagamentos**.
-
-### 6. Executando o Projeto
-Execute o servidor:
-```bash
-npm run dev
-```
-Acesse [http://localhost:3000](http://localhost:3000) em seu navegador.
+### 4. Setup do Banco
+Execute o `database/supabase_setup.sql` no painel SQL do Supabase. Certifique-se de ativar o Provider Google Autenticador.
 
 ## 📌 Documentação Aprofundada
-
-Por favor, para fluxos complexos, verifique o arquivo **[`CLAUDE.md`](./CLAUDE.md)** antes de realizar alterações core, lá você encontrará descrições de:
-- Modo Pagamento vs Modo Apoio e seus webhooks.
-- Fluxo detalhado do painel Admin.
-- Arquitetura oficial de banco e observações sobre uso de funções Cron Jobs.
+Sempre consulte o arquivo **[`CLAUDE.md`](./CLAUDE.md)** antes de realizar alterações core visando manter a estrutura e arquitetura originais intactas.
 
 ## 📝 Licença
-
 Desenvolvido para uso comercial. Copyright (c) 2026 VOXA. Todos os direitos reservados.
