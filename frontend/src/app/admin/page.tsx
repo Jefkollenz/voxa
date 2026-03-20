@@ -96,8 +96,8 @@ export default async function AdminPage() {
         <MetricCard label="Reembolsos Processados" value={fmt(refundsTotal)} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <MetricCard label="Custo de Processamento MP" value={fmt(totalProcessingFee)} sub="Taxas pagas ao Mercado Pago (pós-migração)" />
-        <MetricCard label="Líquido a Pagar — Influenciadores" value={fmt(totalCreatorNet)} sub="Valor líquido acumulado (pós-migração)" />
+        <MetricCard label="Custo de Processamento MP" value={fmt(totalProcessingFee)} sub="Taxas pagas ao Mercado Pago" />
+        <MetricCard label="Líquido a Pagar — Influenciadores" value={fmt(totalCreatorNet)} sub="Valor líquido acumulado" />
       </div>
 
       {/* Row 2: Activity */}
