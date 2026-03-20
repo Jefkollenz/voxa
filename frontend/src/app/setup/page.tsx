@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { CREATOR_NET_RATE } from '@/lib/constants'
+import { CREATOR_NET_RATE, MP_PROCESSING_FEE_ESTIMATE } from '@/lib/constants'
 
 function getPriceBenchmark(price: number): string {
   if (price < 15) return 'Abaixo da média — pode deixar dinheiro na mesa'
@@ -204,9 +204,9 @@ export default function SetupPage() {
           <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
             <p className="text-xs text-gray-500 mb-1">Estimativa mensal com essa configuração:</p>
             <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-instagram">
-              R$ {(minPrice * dailyLimit * 30 * CREATOR_NET_RATE).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              R$ {(minPrice * dailyLimit * 30 * (1 - MP_PROCESSING_FEE_ESTIMATE) * CREATOR_NET_RATE).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">após 10% de taxa da plataforma</p>
+            <p className="text-xs text-gray-500 mt-0.5">estimativa após taxa Voxa (10%) + processamento MP (~1,2%)</p>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}

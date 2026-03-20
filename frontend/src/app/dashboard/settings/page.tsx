@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import Header from '@/components/Header'
-import { CREATOR_NET_RATE } from '@/lib/constants'
+import { CREATOR_NET_RATE, MP_PROCESSING_FEE_ESTIMATE } from '@/lib/constants'
 import AvatarCropModal from './AvatarCropModal'
 
 type FastAskSuggestion = {
@@ -208,7 +208,7 @@ export default function SettingsPage() {
   }
 
   const previewAvatar = avatarUrl.trim() || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
-  const netMonthly = minPrice * dailyLimit * 30 * CREATOR_NET_RATE
+  const netMonthly = minPrice * dailyLimit * 30 * (1 - MP_PROCESSING_FEE_ESTIMATE) * CREATOR_NET_RATE
 
   if (isLoading) {
     return (
@@ -351,7 +351,7 @@ export default function SettingsPage() {
             />
           </div>
           <p className="text-sm text-gray-500 mt-3">
-            Potencial mensal (líquido): <span className="font-bold text-green-600">R$ {netMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            Potencial mensal estimado: <span className="font-bold text-green-600">R$ {netMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> <span className="text-xs text-gray-400">(após taxa Voxa + ~1,2% processamento MP)</span>
           </p>
         </div>
 
