@@ -10,13 +10,14 @@ function getResend(): Resend | null {
   return new Resend(process.env.RESEND_API_KEY)
 }
 
-/** Envolve o conteúdo HTML com doctype e charset UTF-8 corretos */
+/** Envolve o conteúdo HTML com doctype e charset UTF-8 corretos para clientes de email */
 function html(content: string): string {
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOXA</title>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f5">
   <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px 20px;background:#ffffff">
@@ -173,6 +174,7 @@ export async function sendNewQuestionNotification(
     to: creatorEmail,
     subject: `Nova pergunta de R$${price.toFixed(2)} aguardando resposta`,
     html: html(`
+      <p style="color:#555;margin-bottom:4px">Ola, <strong>@${creatorUsername}</strong>!</p>
       <h2 style="color:#8134AF;margin-top:0;margin-bottom:8px">Voce recebeu uma nova pergunta!</h2>
       <p style="color:#333;margin-bottom:8px">
         <strong>${displayName}</strong> pagou <strong>R$${price.toFixed(2)}</strong> e quer sua resposta.
