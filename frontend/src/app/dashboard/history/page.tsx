@@ -231,19 +231,19 @@ export default async function HistoryPage({
           <div className="space-y-4">
             {questions.map(q => (
               <div key={q.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm">
+                <div className="flex items-start justify-between mb-3 gap-3">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm shrink-0">
                       <span role="img" aria-label={q.is_anonymous ? 'Anônimo' : 'Usuário'}>{q.is_anonymous ? '👻' : '👤'}</span>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm text-gray-800">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-gray-800 truncate" title={q.is_anonymous ? 'Anônimo' : q.sender_name}>
                         {q.is_anonymous ? 'Anônimo' : q.sender_name}
                       </p>
-                      <p className="text-xs text-gray-500">{formatDate(q.answered_at)}</p>
+                      <p className="text-xs text-gray-500 truncate">{formatDate(q.answered_at)}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <VisibilityToggle questionId={q.id} initialVisible={q.is_shareable} />
                     <span className="text-green-600 font-bold bg-green-50 border border-green-200 px-2 py-1 rounded-lg text-sm">
                       +R$ {(Number(q.price_paid) * CREATOR_NET_RATE).toFixed(2).replace('.', ',')}

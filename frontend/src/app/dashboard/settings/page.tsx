@@ -335,8 +335,8 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-bold text-lg mb-1">Preço mínimo por pergunta</h2>
           <p className="text-sm text-gray-500 mb-4">Fãs precisam pagar pelo menos este valor para enviar uma pergunta.</p>
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-bold text-[#DD2A7B]">R$ {minPrice}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="text-2xl font-bold text-[#DD2A7B] shrink-0">R$ {minPrice}</span>
             <input
               id="settings-min-price"
               type="range"
@@ -345,7 +345,7 @@ export default function SettingsPage() {
               step={5}
               value={minPrice}
               onChange={e => setMinPrice(Number(e.target.value))}
-              className="flex-1 accent-[#DD2A7B]"
+              className="w-full sm:flex-1 accent-[#DD2A7B]"
               aria-label={`Preço mínimo: R$ ${minPrice}`}
             />
           </div>
@@ -355,8 +355,8 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-bold text-lg mb-1">Limite diário de perguntas</h2>
           <p className="text-sm text-gray-500 mb-4">Máximo de perguntas que você aceita responder por dia.</p>
-          <div className="flex items-center gap-4">
-            <span className="text-2xl font-bold">{dailyLimit} <span className="text-base text-gray-500 font-normal">perguntas/dia</span></span>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <span className="text-2xl font-bold shrink-0">{dailyLimit} <span className="text-base text-gray-500 font-normal">perguntas/dia</span></span>
             <input
               id="settings-daily-limit"
               type="range"
@@ -365,7 +365,7 @@ export default function SettingsPage() {
               step={1}
               value={dailyLimit}
               onChange={e => setDailyLimit(Number(e.target.value))}
-              className="flex-1 accent-[#DD2A7B]"
+              className="w-full sm:flex-1 accent-[#DD2A7B]"
               aria-label={`Limite diário: ${dailyLimit} perguntas`}
             />
           </div>
@@ -438,21 +438,23 @@ export default function SettingsPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">
                     Valor sugerido <span className="text-gray-400">(mínimo: R$ {minPrice})</span>
                   </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-400">R$</span>
-                    <input
-                      type="number"
-                      value={s.amount}
-                      min={minPrice}
-                      max={500}
-                      onChange={e => updateSuggestion(index, 'amount', e.target.value)}
-                      className="w-28 border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
-                    />
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-400">R$</span>
+                      <input
+                        type="number"
+                        value={s.amount}
+                        min={minPrice}
+                        max={500}
+                        onChange={e => updateSuggestion(index, 'amount', e.target.value)}
+                        className="w-28 border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#DD2A7B]"
+                      />
+                    </div>
                     {/* Preview da pílula */}
-                    <div className="flex-1 flex justify-end">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-500 bg-white">
-                        {s.label || '...'}
-                        <span className="text-gray-400">· R$ {Math.max(Number(s.amount) || minPrice, minPrice)}</span>
+                    <div className="flex-1 min-w-0 flex justify-start sm:justify-end">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 text-xs font-medium text-gray-500 bg-white max-w-full">
+                        <span className="truncate">{s.label || '...'}</span>
+                        <span className="text-gray-400 shrink-0">· R$ {Math.max(Number(s.amount) || minPrice, minPrice)}</span>
                       </span>
                     </div>
                   </div>
