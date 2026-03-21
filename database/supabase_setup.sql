@@ -578,3 +578,42 @@ CREATE POLICY "Criador upload verificação" ON storage.objects
 -- Admins leem documentos de verificação
 CREATE POLICY "Admin lê docs verificação" ON storage.objects
     FOR SELECT USING (bucket_id = 'verification-docs' AND EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND account_type = 'admin'));
+
+-- ============================================================
+-- VOXA FOUNDERS BADGE
+-- ============================================================
+
+-- Novo campo no profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_founder BOOLEAN DEFAULT FALSE;
+
+-- Proteger is_founder contra alteração via client (apenas service_role)
+CREATE OR REPLACE FUNCTION protect_profile_admin_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF current_setting('role', true) != 'service_role' THEN
+    IF NEW.account_type IS DISTINCT FROM OLD.account_type THEN
+      RAISE EXCEPTION 'Não é permitido alterar account_type diretamente';
+    END IF;
+    IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_admin diretamente';
+    END IF;
+    IF NEW.is_verified IS DISTINCT FROM OLD.is_verified THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_verified diretamente';
+    END IF;
+    IF NEW.is_founder IS DISTINCT FROM OLD.is_founder THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_founder diretamente';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Seed: marcar os 50 primeiros influencers como founders
+UPDATE profiles
+SET is_founder = TRUE
+WHERE id IN (
+  SELECT id FROM profiles
+  WHERE account_type = 'influencer'
+  ORDER BY created_at ASC
+  LIMIT 50
+);

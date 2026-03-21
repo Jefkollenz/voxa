@@ -4,12 +4,14 @@ import { Search } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import FounderBadge from '@/components/FounderBadge'
 
 type Creator = {
   username: string
   bio: string | null
   avatar_url: string | null
   min_price: number
+  is_founder?: boolean
 }
 
 export default function SearchBar() {
@@ -32,7 +34,7 @@ export default function SearchBar() {
         const supabase = createClient()
         const { data } = await supabase
           .from('profiles')
-          .select('username, bio, avatar_url, min_price')
+          .select('username, bio, avatar_url, min_price, is_founder')
           .eq('is_active', true)
           .ilike('username', `%${busca}%`)
           .limit(5)
@@ -113,7 +115,7 @@ export default function SearchBar() {
                     className="w-10 h-10 rounded-full object-cover"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[#111] text-sm">@{creator.username}</p>
+                    <p className="font-semibold text-[#111] text-sm flex items-center gap-1">@{creator.username} <FounderBadge isFounder={!!creator.is_founder} size="sm" /></p>
                     <p className="text-xs text-gray-500 truncate">{creator.bio || 'Criador na VOXA'}</p>
                   </div>
                   <span className="text-xs font-bold text-transparent bg-clip-text bg-gradient-story">R$ {creator.min_price}</span>

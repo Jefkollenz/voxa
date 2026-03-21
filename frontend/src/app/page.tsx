@@ -1,20 +1,21 @@
 import Link from 'next/link'
 import { Shield, Play, Mic2, Video } from 'lucide-react'
 import SearchBar from '@/components/SearchBar'
+import FounderBadge from '@/components/FounderBadge'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function HomePage() {
   const supabase = createClient()
   const { data: creators } = await supabase
     .from('profiles')
-    .select('username, bio, avatar_url, min_price')
+    .select('username, bio, avatar_url, min_price, is_founder')
     .in('username', ['luciane', 'henrique', 'jefersonkollenz'])
 
   const creatorMap = new Map(creators?.map(c => [c.username, c]) ?? [])
   const creatorsList = [
-    creatorMap.get('luciane') || { username: 'luciane', bio: 'Criador na VOXA', min_price: 15, avatar_url: null },
-    creatorMap.get('henrique') || { username: 'henrique', bio: 'CEO & Founder of VOXA', min_price: 10, avatar_url: null },
-    creatorMap.get('jefersonkollenz') || { username: 'jefersonkollenz', bio: 'Pra quem tem pensamento forte...', min_price: 10, avatar_url: null },
+    creatorMap.get('luciane') || { username: 'luciane', bio: 'Criador na VOXA', min_price: 15, avatar_url: null, is_founder: false },
+    creatorMap.get('henrique') || { username: 'henrique', bio: 'CEO & Founder of VOXA', min_price: 10, avatar_url: null, is_founder: false },
+    creatorMap.get('jefersonkollenz') || { username: 'jefersonkollenz', bio: 'Pra quem tem pensamento forte...', min_price: 10, avatar_url: null, is_founder: false },
   ]
 
   return (
@@ -71,7 +72,7 @@ export default async function HomePage() {
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[#111] text-sm truncate">@{c.username}</p>
+                  <p className="font-bold text-[#111] text-sm truncate flex items-center gap-1">@{c.username} <FounderBadge isFounder={!!c.is_founder} size="sm" /></p>
                   <p className="text-xs text-gray-500 truncate mt-0.5">{c.bio}</p>
                 </div>
               </div>

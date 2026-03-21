@@ -10,6 +10,7 @@ import { SupporterRow } from '@/lib/supporters'
 import MilestoneBadgeRow from '@/components/milestones/MilestoneBadgeRow'
 import MilestoneSection from '@/components/milestones/MilestoneSection'
 import VerifiedBadge from '@/components/VerifiedBadge'
+import FounderBadge from '@/components/FounderBadge'
 
 type Profile = {
   id: string
@@ -21,6 +22,7 @@ type Profile = {
   questions_answered_today: number
   is_active: boolean | null
   is_verified?: boolean
+  is_founder?: boolean
   fast_ask_suggestions?: Array<{ label: string; question: string; amount: number }>
 }
 
@@ -118,7 +120,7 @@ const DEMO_ANSWERS: PublicAnswer[] = [
   },
 ]
 
-function AnswerFeed({ publicAnswers, avatarUrl, displayName, highlightId, isVerified }: { publicAnswers: PublicAnswer[], avatarUrl: string, displayName: string, highlightId?: string, isVerified?: boolean }) {
+function AnswerFeed({ publicAnswers, avatarUrl, displayName, highlightId, isVerified, isFounder }: { publicAnswers: PublicAnswer[], avatarUrl: string, displayName: string, highlightId?: string, isVerified?: boolean, isFounder?: boolean }) {
   return (
     <div className="w-full max-w-2xl mt-16 px-2">
       <h3 className="text-2xl font-bold text-white mb-8 flex items-center gap-2">
@@ -158,7 +160,7 @@ function AnswerFeed({ publicAnswers, avatarUrl, displayName, highlightId, isVeri
                 <div className="w-6 h-6 rounded-full bg-gradient-instagram p-[1px]">
                   <img className="w-full h-full rounded-full object-cover" src={avatarUrl} alt="Creator" />
                 </div>
-                <span className="text-xs font-bold text-gray-500 flex items-center gap-1">{displayName} <VerifiedBadge isVerified={!!isVerified} size="sm" /> respondeu:</span>
+                <span className="text-xs font-bold text-gray-500 flex items-center gap-1">{displayName} <VerifiedBadge isVerified={!!isVerified} size="sm" /> <FounderBadge isFounder={!!isFounder} size="sm" /> respondeu:</span>
               </div>
 
               {item.response_audio_url && (
@@ -262,7 +264,7 @@ export default async function PerfilPage({
 
   const { data: profileRaw } = await supabase
     .from('profiles')
-    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, fast_ask_suggestions, creator_setup_completed, account_type')
+    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, is_founder, fast_ask_suggestions, creator_setup_completed, account_type')
     .eq('username', params.username)
     .single()
 
@@ -357,6 +359,7 @@ export default async function PerfilPage({
           <h1 className="text-2xl font-bold text-white mb-1 flex items-center justify-center gap-1.5">
             {displayName}
             <VerifiedBadge isVerified={!!profile.is_verified} size="md" />
+            <FounderBadge isFounder={!!profile.is_founder} size="md" />
           </h1>
           {profile.bio && (
             <p className="text-[#9CA3AF] text-sm mb-4 leading-relaxed">{profile.bio}</p>
@@ -435,7 +438,7 @@ export default async function PerfilPage({
 
       {/* Feed de respostas públicas */}
       {publicAnswers && publicAnswers.length > 0 ? (
-        <AnswerFeed publicAnswers={publicAnswers} avatarUrl={avatarUrl} displayName={displayName} highlightId={highlightQuestionId ?? undefined} isVerified={!!profile.is_verified} />
+        <AnswerFeed publicAnswers={publicAnswers} avatarUrl={avatarUrl} displayName={displayName} highlightId={highlightQuestionId ?? undefined} isVerified={!!profile.is_verified} isFounder={!!profile.is_founder} />
       ) : (
         <div className="w-full max-w-2xl mt-12 px-4 text-center">
           <p className="text-[#6B7280] text-sm">Ainda não há respostas públicas neste perfil.</p>

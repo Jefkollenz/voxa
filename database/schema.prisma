@@ -19,6 +19,7 @@ model Profile {
   is_admin                 Boolean         @default(false)
   is_active                Boolean         @default(true)
   is_verified              Boolean         @default(false)
+  is_founder               Boolean         @default(false)
   // Individual overrides — null = use platform default from platform_settings
   custom_creator_rate      Decimal?        @db.Decimal(5, 4)
   custom_deadline_hours    Int?
