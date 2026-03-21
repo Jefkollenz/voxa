@@ -61,17 +61,19 @@ export default function SouCriadorPage() {
 
         <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight leading-[1.05] max-w-4xl mb-6">
           Transforme sua{' '}
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#DD2A7B] via-[#F77737] to-[#FCAF45]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045]">
             influência
           </span>
-          {' '}em{' '}
-          <br className="hidden sm:block" />
-          faturamento real.
+          <br />
+          em faturamento real.
         </h1>
 
         <p className="text-lg sm:text-xl text-gray-500 max-w-xl mb-10 leading-relaxed">
-          A plataforma mais simples para criadores monetizarem dúvidas e mensagens de fãs —
-          com <span className="text-white font-semibold">90% de repasse</span> em cada transação.
+          Sua audiência pergunta, você responde através de texto, áudio ou vídeo e você lucra. Com até{' '}
+          <span className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] drop-shadow-[0_0_12px_rgba(221,42,123,0.5)]">
+            90% de repasse
+          </span>{' '}
+          do valor para você focar no que faz de melhor.
         </p>
 
         <Link
@@ -191,6 +193,24 @@ export default function SouCriadorPage() {
               <p className="text-xs text-gray-500 leading-relaxed">{insightVolume}</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── SUA INFLUÊNCIA É O PRODUTO ── */}
+      <section className="px-6 py-20 max-w-3xl mx-auto text-center relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-[#833ab4] opacity-[0.06] blur-[100px] rounded-full pointer-events-none" />
+        <div className="relative z-10">
+          <p className="text-xs font-bold uppercase tracking-widest text-[#DD2A7B] mb-3">O segredo</p>
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight mb-6">
+            Você não precisa de um produto.{' '}
+            <br className="hidden sm:block" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045]">
+              Sua influência já é um.
+            </span>
+          </h2>
+          <p className="text-gray-500 text-lg leading-relaxed max-w-xl mx-auto">
+            Esqueça a complexidade de criar cursos ou ebooks. Na VOXA, você monetiza o que já tem: seu conhecimento e sua atenção. Transforme o tempo ocioso em faturamento real.
+          </p>
         </div>
       </section>
 

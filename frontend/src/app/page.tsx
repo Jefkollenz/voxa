@@ -238,7 +238,7 @@ export default async function HomePage() {
           <div className="flex items-center gap-6 text-xs text-gray-500">
             <span className="font-bold text-transparent bg-clip-text bg-gradient-story">VOXA</span>
           </div>
-          <Link href="/vender" className="text-xs text-gray-500 hover:text-[#fd1d1d] transition-colors font-medium">
+          <Link href="/sou-criador" className="text-xs text-gray-500 hover:text-[#fd1d1d] transition-colors font-medium">
             Você é criador? Comece hoje →
           </Link>
         </div>
