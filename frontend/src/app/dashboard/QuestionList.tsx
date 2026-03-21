@@ -38,6 +38,13 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectError, setRejectError] = useState('')
 
+  // Denúncia
+  const [reportQuestionId, setReportQuestionId] = useState<string | null>(null)
+  const [reportReason, setReportReason] = useState('')
+  const [reportReasonDetail, setReportReasonDetail] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
+  const [reportError, setReportError] = useState('')
+
   // Áudio
   const [recording, setRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -104,6 +111,31 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
     } finally {
       setRejectingId(null)
       setConfirmRejectId(null)
+    }
+  }
+
+  const handleReport = async (questionId: string) => {
+    setIsReporting(true)
+    setReportError('')
+    try {
+      const res = await fetch(`/api/questions/${questionId}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reportReason, reason_detail: reportReasonDetail || undefined }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error ?? 'Erro ao denunciar pergunta')
+      }
+      setQuestions(prev => prev.filter(q => q.id !== questionId))
+      setReportQuestionId(null)
+      setReportReason('')
+      setReportReasonDetail('')
+      showSuccess('Denúncia enviada. A pergunta foi removida da sua fila.')
+    } catch (err: any) {
+      setReportError(err.message ?? 'Erro ao denunciar pergunta. Tente novamente.')
+    } finally {
+      setIsReporting(false)
     }
   }
 
@@ -422,12 +454,18 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
                         <span role="img" aria-label="Mensagem">💬</span> Responder por Texto
                       </button>
                     </div>
-                    <div className="mt-3 text-center">
+                    <div className="mt-3 text-center flex justify-center gap-4">
                       <button
                         onClick={() => setConfirmRejectId(q.id)}
                         className="text-xs text-red-400 hover:text-red-600 underline"
                       >
                         Recusar pergunta
+                      </button>
+                      <button
+                        onClick={() => { setReportQuestionId(q.id); setReportReason(''); setReportReasonDetail(''); setReportError('') }}
+                        className="text-xs text-orange-400 hover:text-orange-600 underline"
+                      >
+                        Denunciar
                       </button>
                     </div>
                   </div>
@@ -476,6 +514,78 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
                 className="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50"
               >
                 {rejectingId ? 'Recusando...' : 'Recusar e reembolsar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de denúncia */}
+      {reportQuestionId && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center z-50 p-0 md:p-4 items-end md:items-center">
+          <div className="bg-white w-full max-w-sm shadow-2xl rounded-t-[32px] md:rounded-2xl p-6 pb-12 md:pb-6 mx-0 md:mx-4">
+            <h3 className="font-semibold text-gray-900 mb-1">Denunciar pergunta</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Se aprovada, você receberá o valor e a pergunta será removida sem estorno.
+            </p>
+
+            <div className="space-y-2 mb-4">
+              {[
+                { value: 'offensive', label: 'Conteúdo ofensivo' },
+                { value: 'harassment', label: 'Assédio' },
+                { value: 'spam', label: 'Spam' },
+                { value: 'threat', label: 'Ameaça' },
+                { value: 'other', label: 'Outro' },
+              ].map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    reportReason === opt.value
+                      ? 'border-orange-400 bg-orange-50'
+                      : 'border-gray-100 hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="report-reason"
+                    value={opt.value}
+                    checked={reportReason === opt.value}
+                    onChange={e => setReportReason(e.target.value)}
+                    className="accent-orange-500"
+                  />
+                  <span className="text-sm text-gray-700">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {reportReason === 'other' && (
+              <textarea
+                value={reportReasonDetail}
+                onChange={e => setReportReasonDetail(e.target.value)}
+                placeholder="Descreva o motivo..."
+                rows={2}
+                maxLength={500}
+                className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none mb-4"
+              />
+            )}
+
+            {reportError && (
+              <p className="text-sm text-red-500 mb-3" role="alert">{reportError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setReportQuestionId(null); setReportError('') }}
+                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleReport(reportQuestionId)}
+                disabled={isReporting || !reportReason || (reportReason === 'other' && !reportReasonDetail.trim())}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+              >
+                {isReporting ? 'Enviando...' : 'Enviar denúncia'}
               </button>
             </div>
           </div>

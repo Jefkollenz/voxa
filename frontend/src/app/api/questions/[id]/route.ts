@@ -31,8 +31,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
     }
 
-    if (question.status === 'answered' || question.status === 'rejected') {
-      return NextResponse.json({ error: 'Pergunta já respondida' }, { status: 422 })
+    if (question.status === 'answered' || question.status === 'rejected' || question.status === 'reported') {
+      return NextResponse.json({ error: 'Pergunta já processada' }, { status: 422 })
     }
 
     const body = await request.json()
