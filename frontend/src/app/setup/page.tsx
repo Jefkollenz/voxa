@@ -154,9 +154,10 @@ function SetupContent() {
       }
     }
 
-    // Checar returnUrl dos query params (passado pelo auth callback) ou localStorage (fallback)
-    const returnUrl = searchParams.get('returnUrl') || localStorage.getItem('voxa_return_url')
+    // Checar returnUrl dos query params (passado pelo auth callback), sessionStorage (QuestionForm) ou localStorage (fallback)
+    const returnUrl = searchParams.get('returnUrl') || sessionStorage.getItem('voxa_return_url') || localStorage.getItem('voxa_return_url')
     if (returnUrl) {
+      sessionStorage.removeItem('voxa_return_url')
       localStorage.removeItem('voxa_return_url')
       // Validar que returnUrl é um path relativo seguro
       if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {

@@ -279,9 +279,12 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
                   window.removeEventListener('beforeunload', beforeUnloadRef.current)
                   beforeUnloadRef.current = null
                 }
+                // Salvar returnUrl em sessionStorage como fallback
+                // (caso o Supabase não redirecione para o callback corretamente)
+                const returnPath = `/perfil/${username}`
+                sessionStorage.setItem('voxa_return_url', returnPath)
                 // Iniciar OAuth direto — sem passar pela página /login
                 const supabase = createClient()
-                const returnPath = `/perfil/${username}`
                 const callbackUrl = `${window.location.origin}/auth/callback?returnUrl=${encodeURIComponent(returnPath)}`
                 const { error } = await supabase.auth.signInWithOAuth({
                   provider: 'google',

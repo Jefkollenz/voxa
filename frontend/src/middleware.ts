@@ -96,9 +96,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
+  // Homepage: se autenticado mas sem perfil, redirecionar para /setup
+  // (safety net para quando o Supabase redireciona para a homepage após OAuth
+  //  em vez do nosso /auth/callback)
+  if (pathname === '/' && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile) {
+      return NextResponse.redirect(new URL('/setup', request.url))
+    }
+  }
+
   return response
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*', '/invite/:path*'],
+  matcher: ['/', '/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*', '/invite/:path*'],
 }
