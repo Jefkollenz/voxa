@@ -30,7 +30,7 @@ export async function PATCH(
     .from('profiles')
     .update({
       account_type: 'influencer',
-      creator_setup_completed: false,
+      creator_setup_completed: true,
     })
     .eq('id', params.id)
     .eq('account_type', 'fan')
