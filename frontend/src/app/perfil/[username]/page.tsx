@@ -226,6 +226,8 @@ export default async function PerfilPage({
             avatarUrl={avatarUrl}
             displayName={displayName}
             disabled={true}
+            isAuthenticated={false}
+            userProfile={null}
           />
         </div>
         <MilestoneSection milestones={demoMilestones} />
@@ -237,13 +239,55 @@ export default async function PerfilPage({
 
   const supabase = createClient()
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, fast_ask_suggestions')
-    .eq('username', params.username)
-    .single<Profile>()
+  // Buscar usuário autenticado (se houver) para passar ao QuestionForm
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+  let currentUserProfile: { id: string; username: string; email: string } | null = null
+  if (currentUser) {
+    const { data: fanProfile } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .eq('id', currentUser.id)
+      .single()
+    if (fanProfile) {
+      currentUserProfile = {
+        id: fanProfile.id,
+        username: fanProfile.username,
+        email: currentUser.email ?? '',
+      }
+    }
+  }
 
-  if (!profile) notFound()
+  const { data: profileRaw } = await supabase
+    .from('profiles')
+    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, fast_ask_suggestions, creator_setup_completed, account_type')
+    .eq('username', params.username)
+    .single()
+
+  if (!profileRaw) notFound()
+  const profile = profileRaw as Profile & { creator_setup_completed?: boolean; account_type?: string }
+
+  // Fãs não têm perfil público — apenas influencers/admins
+  if (profile.account_type === 'fan') notFound()
+
+  // Perfil de influencer que ainda não completou setup — mostrar "Em breve"
+  if (profile.account_type === 'influencer' && profile.creator_setup_completed === false) {
+    const avatarUrl = profile.avatar_url ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] text-white flex flex-col items-center justify-center py-12 px-4">
+        <div className="text-center">
+          <img className="w-24 h-24 rounded-full border-4 border-white/10 object-cover mx-auto mb-6" src={avatarUrl} alt={`@${profile.username}`} />
+          <h1 className="text-2xl font-bold text-white mb-2">@{profile.username}</h1>
+          <p className="text-[#9CA3AF] text-sm mb-4">Este perfil está sendo configurado.</p>
+          <div className="inline-flex items-center gap-2 bg-[#DD2A7B]/10 border border-[#DD2A7B]/20 px-4 py-2 rounded-full text-sm font-semibold text-[#DD2A7B]">
+            Em breve
+          </div>
+          <a href="/" className="block mt-8 text-sm text-[#6B7280] hover:text-white transition-colors">
+            ← Voltar para a página inicial
+          </a>
+        </div>
+      </div>
+    )
+  }
 
   if (profile.is_active === false) {
     return (
@@ -372,6 +416,8 @@ export default async function PerfilPage({
           displayName={displayName}
           disabled={questionsLeft === 0}
           fastAskSuggestions={profile.fast_ask_suggestions}
+          isAuthenticated={!!currentUserProfile}
+          userProfile={currentUserProfile}
         />
       </div>
 

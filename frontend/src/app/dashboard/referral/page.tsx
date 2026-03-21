@@ -18,11 +18,16 @@ export default function ReferralDashboardPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username')
+        .select('username, account_type')
         .eq('id', user.id)
         .single()
 
-      if (profile) setUsername(profile.username)
+      if (!profile || profile.account_type === 'fan') {
+        router.push('/dashboard')
+        return
+      }
+
+      setUsername(profile.username)
     }
     load()
   }, [router])

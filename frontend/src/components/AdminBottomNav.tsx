@@ -2,15 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, Users, Mail, Settings, LogOut } from 'lucide-react'
 
 export default function AdminBottomNav() {
   const pathname = usePathname()
-  
+
   const navItems = [
     { name: 'Geral', href: '/admin', icon: LayoutDashboard },
-    { name: 'Criadores', href: '/admin/creators', icon: Users },
-    { name: 'Parametros', href: '/admin/settings', icon: Settings },
+    { name: 'Usuários', href: '/admin/users', icon: Users },
+    { name: 'Convites', href: '/admin/invites', icon: Mail },
+    { name: 'Config', href: '/admin/settings', icon: Settings },
     { name: 'Sair', href: '/dashboard', icon: LogOut },
   ]
 

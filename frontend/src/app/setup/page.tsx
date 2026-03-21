@@ -1,33 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { CREATOR_NET_RATE, MP_PROCESSING_FEE_ESTIMATE } from '@/lib/constants'
-import { trackCreatorSetupComplete } from '@/lib/analytics'
-
-function getPriceBenchmark(price: number): string {
-  if (price < 15) return 'Abaixo da média — pode deixar dinheiro na mesa'
-  if (price <= 25) return 'Faixa popular — boa conversão para criadores iniciantes'
-  if (price <= 50) return 'Faixa recomendada — equilíbrio entre volume e valor'
-  if (price <= 100) return 'Faixa premium — ideal para especialistas com audiência engajada'
-  return 'Exclusivo — para criadores com forte reputação no nicho'
-}
+import { Camera } from 'lucide-react'
 
 const RESERVED_USERNAMES = new Set([
   'admin', 'api', 'dashboard', 'login', 'setup', 'perfil', 'vender',
   'auth', 'webhook', 'suporte', 'support', 'help', 'voxa', 'exemplo',
   'refund', 'refunds', 'join', 'history', 'settings', 'referral',
   'payment', 'callback', 'status', 'health', 'terms', 'privacy',
+  'invite', 'invites', 'users', 'questions', 'spending', 'profile',
 ])
 
-export default function SetupPage() {
+function SetupContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null)
   const [username, setUsername] = useState('')
-  const [bio, setBio] = useState('')
-  const [minPrice, setMinPrice] = useState(10)
-  const [dailyLimit, setDailyLimit] = useState(10)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -39,6 +32,8 @@ export default function SetupPage() {
         router.push('/login')
       } else {
         setUserId(user.id)
+        // Usar foto do Google como fallback
+        setUserPhotoUrl(user.user_metadata?.avatar_url || null)
       }
     })
   }, [router])
@@ -66,6 +61,27 @@ export default function SetupPage() {
     return () => clearTimeout(timeout)
   }, [username])
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowed.includes(file.type)) {
+      setError('Formato inválido. Use JPG, PNG, WebP ou GIF.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Arquivo muito grande. Máximo 5 MB.')
+      return
+    }
+
+    setAvatarFile(file)
+    // Revogar URL anterior para evitar memory leak
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+    setAvatarPreview(URL.createObjectURL(file))
+    setError('')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId || usernameStatus !== 'available') return
@@ -73,6 +89,24 @@ export default function SetupPage() {
     setError('')
 
     const supabase = createClient()
+
+    // Upload avatar se selecionado
+    let avatarUrl: string | null = null
+    if (avatarFile) {
+      const path = `${userId}/${Date.now()}.jpg`
+      const { data, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, avatarFile, { upsert: true, contentType: avatarFile.type })
+
+      if (uploadError || !data) {
+        setError('Erro ao fazer upload do avatar. Tente novamente.')
+        setIsLoading(false)
+        return
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(data.path)
+      avatarUrl = publicUrl
+    }
 
     // Ler referral do localStorage (válido por 7 dias)
     let referredById: string | null = null
@@ -87,22 +121,53 @@ export default function SetupPage() {
       referredById = referrer?.id ?? null
     }
 
-    const { error } = await supabase.from('profiles').insert({
+    const { error: insertError } = await supabase.from('profiles').insert({
       id: userId,
       username: username.toLowerCase().trim(),
-      bio: bio.trim() || null,
-      min_price: minPrice,
-      daily_limit: dailyLimit,
+      avatar_url: avatarUrl,
+      account_type: 'fan',
       referred_by_id: referredById,
     })
 
-    if (error) {
+    if (insertError) {
       setError('Erro ao criar perfil. Tente novamente.')
       setIsLoading(false)
-    } else {
-      trackCreatorSetupComplete(username.toLowerCase().trim(), minPrice)
-      router.push('/dashboard')
+      return
     }
+
+    // Checar invite code dos query params (passado pelo auth callback) ou localStorage (via /invite/[code])
+    const inviteCode = searchParams.get('inviteCode') || localStorage.getItem('voxa_invite_code')
+    if (inviteCode) {
+      localStorage.removeItem('voxa_invite_code')
+      try {
+        const res = await fetch('/api/invite/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: inviteCode }),
+        })
+        if (res.ok) {
+          router.push('/setup/creator')
+          return
+        }
+      } catch {
+        // Convite inválido/expirado — continuar normalmente
+      }
+    }
+
+    // Checar returnUrl dos query params (passado pelo auth callback) ou localStorage (fallback)
+    const returnUrl = searchParams.get('returnUrl') || localStorage.getItem('voxa_return_url')
+    if (returnUrl) {
+      localStorage.removeItem('voxa_return_url')
+      // Validar que returnUrl é um path relativo seguro
+      if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) {
+        router.push(returnUrl)
+      } else {
+        router.push('/dashboard')
+      }
+      return
+    }
+
+    router.push('/dashboard')
   }
 
   const usernameHint = () => {
@@ -114,101 +179,52 @@ export default function SetupPage() {
   }
 
   const hint = usernameHint()
+  const displayAvatar = avatarPreview || userPhotoUrl
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 text-white relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-[#DD2A7B] opacity-10 blur-[70px] md:blur-[120px] rounded-full pointer-events-none -mt-16 sm:-mt-32 -mr-16 sm:-mr-32"></div>
-      <div className="absolute -bottom-16 sm:-bottom-32 -left-16 sm:-left-32 w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-purple-600 opacity-10 blur-[70px] md:blur-[120px] rounded-full pointer-events-none"></div>
-
-      <div className="w-full max-w-md bg-[#111] rounded-[32px] border border-white/10 p-8 shadow-2xl relative z-10">
-        <h1 className="text-2xl font-bold mb-1">Configure seu perfil</h1>
+    <div className="w-full max-w-md bg-[#111] rounded-[32px] border border-white/10 p-8 shadow-2xl relative z-10">
+        <h1 className="text-2xl font-bold mb-1">Crie sua conta</h1>
         <p className="text-gray-500 text-sm mb-8">
-          Você vai compartilhar o link <span className="text-white font-medium">voxa.com/perfil/<span className="text-transparent bg-clip-text bg-gradient-instagram">{username || 'seuusername'}</span></span> com seus fãs.
+          Escolha seu username para começar a usar a <span className="text-transparent bg-clip-text bg-gradient-instagram">VOXA</span>.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Avatar */}
+          <div className="flex justify-center">
+            <label className="relative cursor-pointer group">
+              <div className="w-20 h-20 rounded-full bg-[#1a1a1a] border-2 border-white/20 flex items-center justify-center overflow-hidden group-hover:border-white/40 transition-colors">
+                {displayAvatar ? (
+                  <img src={displayAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <Camera className="w-8 h-8 text-gray-500" />
+                )}
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-gradient-instagram rounded-full flex items-center justify-center">
+                <Camera className="w-3.5 h-3.5 text-white" />
+              </div>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+          <p className="text-center text-xs text-gray-500 -mt-2">Foto opcional</p>
+
           {/* Username */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Username <span className="text-red-400">*</span></label>
             <input
               type="text"
-              placeholder="ex: caio_muniz"
+              placeholder="ex: seu_nome"
               value={username}
-              onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
               required
               maxLength={30}
               className="w-full bg-[#1a1a1a] border border-white/20 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-white/40"
             />
             {hint && <p className={`text-xs mt-1 ${hint.color}`} aria-live="polite">{hint.text}</p>}
-          </div>
-
-          {/* Bio */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Bio</label>
-            <textarea
-              placeholder="Descreva o que seus fãs podem te perguntar..."
-              value={bio}
-              onChange={e => setBio(e.target.value)}
-              maxLength={200}
-              rows={3}
-              className="w-full bg-[#1a1a1a] border border-white/20 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-white/40 resize-none"
-            />
-            <p className="text-right text-xs text-gray-500 mt-1">{bio.length}/200</p>
-          </div>
-
-          {/* Preço mínimo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Preço mínimo por pergunta: <span className="text-white font-bold">R$ {minPrice}</span>
-            </label>
-            <input
-              id="setup-min-price"
-              type="range"
-              min={5}
-              max={100}
-              step={5}
-              value={minPrice}
-              onChange={e => setMinPrice(Number(e.target.value))}
-              className="w-full accent-pink-500"
-              aria-label={`Preço mínimo: R$ ${minPrice}`}
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>R$ 5</span>
-              <span>R$ 100</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1.5 italic">💡 {getPriceBenchmark(minPrice)}</p>
-            <p className="text-xs text-gray-600 mt-0.5">Criadores similares cobram entre R$20–R$50. Você pode alterar isso a qualquer momento.</p>
-          </div>
-
-          {/* Limite diário */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              Limite de perguntas por dia: <span className="text-white font-bold">{dailyLimit}</span>
-            </label>
-            <input
-              id="setup-daily-limit"
-              type="range"
-              min={1}
-              max={50}
-              step={1}
-              value={dailyLimit}
-              onChange={e => setDailyLimit(Number(e.target.value))}
-              className="w-full accent-pink-500"
-              aria-label={`Limite diário: ${dailyLimit} perguntas`}
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>1</span>
-              <span>50</span>
-            </div>
-          </div>
-
-          {/* Ganhos estimados */}
-          <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
-            <p className="text-xs text-gray-500 mb-1">Estimativa mensal com essa configuração:</p>
-            <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-instagram">
-              R$ {(minPrice * dailyLimit * 30 * (1 - MP_PROCESSING_FEE_ESTIMATE) * CREATOR_NET_RATE).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">estimativa após taxa Voxa (10%) + processamento MP (~1,2%)</p>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
@@ -218,10 +234,27 @@ export default function SetupPage() {
             disabled={isLoading || usernameStatus !== 'available'}
             className="w-full bg-gradient-instagram rounded-xl py-3 px-4 text-white font-bold disabled:opacity-40 transition-all"
           >
-            {isLoading ? 'Criando perfil...' : 'Criar meu perfil'}
+            {isLoading ? 'Criando conta...' : 'Criar minha conta'}
           </button>
         </form>
       </div>
+  )
+}
+
+export default function SetupPage() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 text-white relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-[#DD2A7B] opacity-10 blur-[70px] md:blur-[120px] rounded-full pointer-events-none -mt-16 sm:-mt-32 -mr-16 sm:-mr-32"></div>
+      <div className="absolute -bottom-16 sm:-bottom-32 -left-16 sm:-left-32 w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-purple-600 opacity-10 blur-[70px] md:blur-[120px] rounded-full pointer-events-none"></div>
+
+      <Suspense fallback={
+        <div className="w-full max-w-md bg-[#111] rounded-[32px] border border-white/10 p-8 shadow-2xl relative z-10 text-center">
+          <h1 className="text-2xl font-bold mb-1">Crie sua conta</h1>
+          <p className="text-gray-500 text-sm">Carregando...</p>
+        </div>
+      }>
+        <SetupContent />
+      </Suspense>
     </div>
   )
 }

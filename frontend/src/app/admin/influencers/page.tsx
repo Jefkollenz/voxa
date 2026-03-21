@@ -15,11 +15,12 @@ export default async function AdminCreatorsPage() {
   const { data: creators } = await supabaseAdmin
     .from('profiles')
     .select('id, username, avatar_url, is_active, questions_answered_today, min_price, created_at')
+    .eq('account_type', 'influencer')
     .order('created_at', { ascending: false })
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Todos os Criadores</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Influenciadores</h1>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
@@ -62,7 +63,7 @@ export default async function AdminCreatorsPage() {
                   </td>
                   <td className="px-6 py-4 text-gray-500">{joinedAt}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/admin/creators/${creator.id}`} className="text-[#DD2A7B] text-xs font-semibold hover:underline">
+                    <Link href={`/admin/influencers/${creator.id}`} className="text-[#DD2A7B] text-xs font-semibold hover:underline">
                       Ver detalhes
                     </Link>
                   </td>

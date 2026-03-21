@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import MercadoPagoConfig, { Preference } from 'mercadopago'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { randomUUID } from 'crypto'
 
 const mp = new MercadoPagoConfig({
@@ -17,8 +18,29 @@ const VALID_SERVICE_TYPES = ['base', 'premium'] as const
 
 export async function POST(request: Request) {
   try {
+    // Autenticação obrigatória
+    const supabase = createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 })
+    }
+
+    // Buscar perfil do sender (fã)
+    const { data: senderProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, username')
+      .eq('id', user.id)
+      .single()
+
+    if (!senderProfile) {
+      return NextResponse.json({ error: 'Perfil não encontrado. Complete seu cadastro.' }, { status: 403 })
+    }
+
+    const senderEmail = user.email ?? ''
+    const senderName = senderProfile.username
+
     const body = await request.json()
-    const { username, question, name, email, amount, serviceType, isAnonymous, isShareable, is_support_only } = body
+    const { username, question, amount, serviceType, isAnonymous, isShareable, is_support_only } = body
 
     if (!username || !question || !amount) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
@@ -26,11 +48,6 @@ export async function POST(request: Request) {
 
     // Sanitizar e validar entradas
     const sanitizedQuestion = String(question).trim().slice(0, 1000)
-    const sanitizedName = String(name || '').trim().slice(0, 100)
-    const sanitizedEmail = String(email || '').trim().slice(0, 254)
-    if (sanitizedEmail && !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(sanitizedEmail)) {
-      return NextResponse.json({ error: 'E-mail inválido' }, { status: 400 })
-    }
     const sanitizedServiceType: 'base' | 'premium' = VALID_SERVICE_TYPES.includes(serviceType) ? serviceType : 'base'
     const sanitizedAmount = Number(amount)
 
@@ -68,6 +85,7 @@ export async function POST(request: Request) {
 
     const externalRef = randomUUID()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const displayName = isAnonymous ? 'Anônimo' : senderName
 
     // Salvar intenção de pagamento no Supabase (com todos os dados da pergunta)
     const { error: intentError } = await supabaseAdmin
@@ -78,8 +96,9 @@ export async function POST(request: Request) {
         amount: sanitizedAmount,
         question_data: {
           creator_id: profile.id,
-          sender_name: isAnonymous ? 'Anônimo' : (sanitizedName || 'Anônimo'),
-          sender_email: sanitizedEmail || null,
+          sender_id: user.id,
+          sender_name: displayName,
+          sender_email: senderEmail || null,
           content: sanitizedQuestion,
           price_paid: sanitizedAmount,
           service_type: sanitizedServiceType,
@@ -113,9 +132,9 @@ export async function POST(request: Request) {
             },
           ],
           payer: {
-            name: sanitizedName || 'Anônimo',
+            name: displayName,
             surname: '',
-            ...(sanitizedEmail && { email: sanitizedEmail }),
+            ...(senderEmail && { email: senderEmail }),
           },
           payment_methods: {
             default_payment_method_id: 'pix',

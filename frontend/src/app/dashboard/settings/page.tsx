@@ -56,11 +56,14 @@ export default function SettingsPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions, is_admin')
+        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions, is_admin, account_type')
         .eq('id', user.id)
         .single()
 
       if (!profile) { router.push('/setup'); return }
+
+      // Somente influencers/admins acessam configurações de criador
+      if (profile.account_type === 'fan') { router.push('/dashboard'); return }
 
       setUserId(user.id)
       setUsername(profile.username)
@@ -498,7 +501,7 @@ export default function SettingsPage() {
         />
       )}
 
-      {username && <BottomNav username={username} />}
+      {username && <BottomNav username={username} accountType="influencer" dashboardMode="creator" />}
     </div>
   )
 }

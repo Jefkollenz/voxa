@@ -38,18 +38,56 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Rotas admin: exigem login + is_admin = true
+  // Rotas admin: exigem login + account_type = 'admin'
   if (pathname.startsWith('/admin')) {
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
     const { data: profile } = await supabase
       .from('profiles')
-      .select('is_admin')
+      .select('account_type')
       .eq('id', user.id)
       .single()
-    if (!profile?.is_admin) {
+    if (profile?.account_type !== 'admin') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+  }
+
+  // Proteção de rotas autenticadas que dependem do perfil
+  if (user && (pathname.startsWith('/dashboard') || pathname.startsWith('/setup'))) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('account_type, creator_setup_completed')
+      .eq('id', user.id)
+      .single()
+
+    // /setup: se já tem perfil, redirecionar
+    if (pathname === '/setup' && profile) {
+      // Influencer sem setup completo → /setup/creator
+      if ((profile.account_type === 'influencer' || profile.account_type === 'admin') && !profile.creator_setup_completed) {
+        return NextResponse.redirect(new URL('/setup/creator', request.url))
+      }
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+
+    // /setup/creator: só influencer/admin com setup pendente
+    if (pathname === '/setup/creator' || pathname.startsWith('/setup/creator')) {
+      if (!profile) {
+        return NextResponse.redirect(new URL('/setup', request.url))
+      }
+      if (profile.account_type === 'fan') {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+      if (profile.creator_setup_completed) {
+        return NextResponse.redirect(new URL('/dashboard', request.url))
+      }
+    }
+
+    // /dashboard: influencer sem setup → forçar setup
+    if (pathname.startsWith('/dashboard') && profile) {
+      if ((profile.account_type === 'influencer' || profile.account_type === 'admin') && !profile.creator_setup_completed) {
+        return NextResponse.redirect(new URL('/setup/creator', request.url))
+      }
     }
   }
 
@@ -62,5 +100,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/setup/:path*', '/login', '/admin/:path*', '/invite/:path*'],
 }

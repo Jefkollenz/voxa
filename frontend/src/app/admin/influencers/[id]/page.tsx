@@ -73,7 +73,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
 
   return (
     <div className="p-4 md:p-8">
-      <Link href="/admin/creators" className="text-sm text-gray-500 hover:text-gray-700 mb-6 inline-flex items-center gap-1">
+      <Link href="/admin/influencers" className="text-sm text-gray-500 hover:text-gray-700 mb-6 inline-flex items-center gap-1">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
         </svg>

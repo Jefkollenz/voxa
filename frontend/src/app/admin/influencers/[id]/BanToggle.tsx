@@ -21,7 +21,7 @@ export default function BanToggle({ creatorId, isActive, username }: Props) {
 
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/creators/${creatorId}`, {
+      const res = await fetch(`/api/admin/influencers/${creatorId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !active }),

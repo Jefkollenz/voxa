@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShieldCheck, Heart } from 'lucide-react'
+import { ShieldCheck, Heart, X } from 'lucide-react'
 import { RESPONSE_DEADLINE_HOURS } from '@/lib/constants'
 import { trackFormStart, trackPaymentInitiated } from '@/lib/analytics'
 
@@ -12,6 +12,12 @@ type FastAskSuggestion = {
   amount: number
 }
 
+type UserProfile = {
+  id: string
+  username: string
+  email: string
+}
+
 type Props = {
   username: string
   minPrice: number
@@ -19,6 +25,8 @@ type Props = {
   displayName: string
   disabled: boolean
   fastAskSuggestions?: FastAskSuggestion[]
+  isAuthenticated: boolean
+  userProfile: UserProfile | null
 }
 
 type Mode = 'question' | 'support'
@@ -31,7 +39,7 @@ const DEFAULT_FAST_ASK: FastAskSuggestion[] = [
   { label: '🌟 Recomendação', question: 'Qual é a sua recomendação exclusiva para quem quer se destacar nessa área?', amount: 15 },
 ]
 
-export default function QuestionForm({ username, minPrice, displayName, disabled, fastAskSuggestions }: Props) {
+export default function QuestionForm({ username, minPrice, displayName, disabled, fastAskSuggestions, isAuthenticated, userProfile }: Props) {
   const router = useRouter()
 
   // BUG FIX: garante que minPrice é sempre um número positivo válido
@@ -53,13 +61,12 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
   const [serviceType, setServiceType] = useState<'base' | 'premium'>('base')
   const [amount, setAmount] = useState(baseMin)
   const [supportAmount, setSupportAmount] = useState(SUPPORT_PRESETS[0])
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [isShareable, setIsShareable] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [activeSuggestion, setActiveSuggestion] = useState<number | null>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   // Avisa o usuário ao sair da página com dados preenchidos
   const beforeUnloadRef = useRef<((e: BeforeUnloadEvent) => void) | null>(null)
@@ -77,8 +84,29 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
     return () => window.removeEventListener('beforeunload', handler)
   }, [question, supportMessage])
 
+  // Restaurar dados do formulário do sessionStorage (após login redirect)
+  useEffect(() => {
+    const storageKey = `voxa_pending_question_${username}`
+    const saved = sessionStorage.getItem(storageKey)
+    if (saved) {
+      try {
+        const data = JSON.parse(saved)
+        if (data.question) setQuestion(data.question)
+        if (data.supportMessage) setSupportMessage(data.supportMessage)
+        if (data.mode) setMode(data.mode)
+        if (data.serviceType) setServiceType(data.serviceType)
+        if (data.amount) setAmount(data.amount)
+        if (data.supportAmount) setSupportAmount(data.supportAmount)
+        if (data.isAnonymous !== undefined) setIsAnonymous(data.isAnonymous)
+        if (data.isShareable !== undefined) setIsShareable(data.isShareable)
+        sessionStorage.removeItem(storageKey)
+      } catch {
+        sessionStorage.removeItem(storageKey)
+      }
+    }
+  }, [username])
+
   // Filtra sugestões inválidas e remove as que teriam o valor forçado acima do dobro do original
-  // (evita UX confusa como "Dica rápida · R$ 50" quando o original era R$ 15)
   const rawSuggestions: FastAskSuggestion[] =
     Array.isArray(fastAskSuggestions) && fastAskSuggestions.length > 0
       ? fastAskSuggestions.filter(s => s?.label && s?.question && Number(s?.amount) > 0)
@@ -86,7 +114,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
 
   const suggestions = rawSuggestions.filter(s => {
     const original = Number(s.amount) || 0
-    // Se o minPrice forçaria o valor a mais que 2x o original, a sugestão perde o sentido
     return original >= baseMin || baseMin <= original * 2
   })
 
@@ -100,7 +127,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
 
   const handleFastAsk = (suggestion: FastAskSuggestion, index: number) => {
     setQuestion(suggestion.question)
-    // BUG FIX: sempre respeita o mínimo do criador
     const safeAmount = Math.max(Number(suggestion.amount) || baseMin, baseMin)
     setAmount(safeAmount)
     setServiceType('base')
@@ -113,12 +139,18 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
     fireFormStart(newMode)
   }
 
-  // BUG FIX: handler seguro para input numérico que evita NaN e valores fora do range
   const handleAmountChange = (val: string, setter: (n: number) => void, min: number) => {
     const parsed = parseFloat(val)
     if (!isNaN(parsed)) {
       setter(Math.max(min, Math.min(10000, parsed)))
     }
+  }
+
+  const saveFormToSession = () => {
+    const storageKey = `voxa_pending_question_${username}`
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      question, supportMessage, mode, serviceType, amount, supportAmount, isAnonymous, isShareable,
+    }))
   }
 
   const handleSubmit = async () => {
@@ -145,8 +177,11 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
       setError('Valor máximo é R$ 10.000.')
       return
     }
-    if (!email.trim() || !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(email.trim())) {
-      setError('Informe um e-mail válido para continuar.')
+
+    // Se não autenticado: salvar dados e mostrar modal de login
+    if (!isAuthenticated) {
+      saveFormToSession()
+      setShowLoginModal(true)
       return
     }
 
@@ -160,8 +195,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
         body: JSON.stringify({
           username,
           question: finalQuestion,
-          name: isAnonymous ? 'Anônimo' : name.trim() || 'Anônimo',
-          email: email.trim(),
           amount: finalAmount,
           serviceType: isSupport ? 'support' : serviceType,
           isAnonymous,
@@ -178,7 +211,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
         return
       }
 
-      // BUG FIX: router.push pode falhar — garante reset do estado
       if (!data.init_point) {
         setError('Resposta inválida do servidor. Tente novamente.')
         setIsSubmitting(false)
@@ -199,7 +231,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
         beforeUnloadRef.current = null
       }
       router.push(data.init_point)
-      // Não reseta isSubmitting aqui intencionalmente — o redirect vai desmontar o componente
     } catch {
       setError('Erro de conexão. Verifique sua internet e tente novamente.')
       setIsSubmitting(false)
@@ -223,6 +254,35 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
 
   return (
     <div className="p-8 relative z-10">
+
+      {/* Modal de Login */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-[#111] rounded-[24px] border border-white/10 p-6 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h2 className="text-xl font-bold text-white mb-2">Faça login para continuar</h2>
+            <p className="text-sm text-gray-400 mb-6">
+              Você precisa estar cadastrado para enviar {isSupport ? 'um apoio' : 'uma pergunta'}.
+            </p>
+            <a
+              href={`/login?returnUrl=${encodeURIComponent(`/perfil/${username}`)}`}
+              className="w-full relative flex items-center justify-center border border-white/20 bg-[#1a1a1a] rounded-xl py-3 px-4 text-white font-semibold hover:bg-white/5 hover:border-white/30 transition-all"
+            >
+              <span className="absolute left-4 w-6 h-6 flex items-center justify-center text-xs bg-white text-black rounded-full font-bold">G</span>
+              Continuar com Google
+            </a>
+            <p className="text-xs text-gray-500 text-center mt-4">
+              Seus dados do formulário serão preservados.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Toggle Pergunta / Apoiar */}
       <div className="flex bg-[#1a1a1a] rounded-2xl p-1 mb-6 border border-white/5">
@@ -466,34 +526,6 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
           </div>
         </div>
 
-        {/* Nome: ocultar quando anônimo */}
-        {!isAnonymous && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Seu Nome (opcional)</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-[#DD2A7B]/40 focus:border-[#DD2A7B]/60 outline-none transition-all placeholder-gray-400"
-              placeholder="Joãozinho"
-            />
-          </div>
-        )}
-
-        {/* Email */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Seu E-mail</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full bg-[#1a1a1a] border border-white/10 rounded-xl p-3 text-white focus:ring-2 focus:ring-[#DD2A7B]/40 focus:border-[#DD2A7B]/60 outline-none transition-all placeholder-gray-400"
-            placeholder="para@exemplo.com"
-          />
-          <p className="text-xs text-gray-600 mt-1">Você receberá a resposta neste email.</p>
-        </div>
-
         {/* Opções */}
         <div className="bg-[#1a1a1a] p-4 rounded-xl border border-white/5">
           <label className="flex items-center gap-3 cursor-pointer min-h-[44px]">
@@ -547,7 +579,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
           <div className="flex items-center justify-center gap-2 text-sm text-gray-500 bg-white/5 p-3 rounded-lg border border-white/5">
             <Heart className="w-4 h-4 text-[#DD2A7B] shrink-0" />
             <p className="leading-snug">
-              Apoios não exigem resposta do criador. Seu gesto vai diretamente para ele. 💙
+              Apoios não exigem resposta do criador. Seu gesto vai diretamente para ele.
             </p>
           </div>
         )}

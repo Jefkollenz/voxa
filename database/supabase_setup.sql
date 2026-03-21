@@ -7,7 +7,7 @@
 -- 1. Enum de status da pergunta
 CREATE TYPE question_status AS ENUM ('pending', 'answered', 'expired');
 
--- 2. Tabela de Perfis (criadores)
+-- 2. Tabela de Perfis (usuários: fãs, influencers, admins)
 -- Nota: o `id` usa o mesmo UUID do auth.users para facilitar RLS
 CREATE TABLE profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -20,6 +20,8 @@ CREATE TABLE profiles (
     referred_by_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     is_admin BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
+    account_type TEXT DEFAULT 'fan' CHECK (account_type IN ('fan', 'influencer', 'admin')),
+    creator_setup_completed BOOLEAN DEFAULT FALSE,
     custom_creator_rate DECIMAL(5, 4),      -- NULL = usa default da plataforma
     custom_deadline_hours INTEGER,          -- NULL = usa default da plataforma
     fast_ask_suggestions JSONB,
@@ -43,12 +45,24 @@ CREATE TABLE questions (
     is_support_only BOOLEAN DEFAULT FALSE,
     response_text TEXT,
     response_audio_url TEXT,
+    sender_id UUID REFERENCES profiles(id),  -- fã que enviou a pergunta (NULL para perguntas legadas)
     answered_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Tabela de Transações
+-- 4. Tabela de Convites de Influencer
+CREATE TABLE invite_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
+    created_by UUID NOT NULL REFERENCES profiles(id),
+    used_by UUID REFERENCES profiles(id),
+    used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Tabela de Transações
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
@@ -138,11 +152,41 @@ CREATE POLICY "Perfis são públicos" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Criador insere próprio perfil" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Criador atualiza próprio perfil" ON profiles FOR UPDATE USING (auth.uid() = id);
 
+-- Trigger: impedir que usuário altere campos protegidos (account_type, is_admin) via client
+-- Apenas service_role (webhooks, admin APIs) pode alterar esses campos
+CREATE OR REPLACE FUNCTION protect_profile_admin_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- service_role bypassa RLS e este trigger não se aplica a ele
+  -- Mas em chamadas via client (com RLS ativo), bloqueamos mudanças em campos sensíveis
+  IF current_setting('role', true) != 'service_role' THEN
+    IF NEW.account_type IS DISTINCT FROM OLD.account_type THEN
+      RAISE EXCEPTION 'Não é permitido alterar account_type diretamente';
+    END IF;
+    IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_admin diretamente';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_protect_profile_admin_fields
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION protect_profile_admin_fields();
+
 -- questions:
 CREATE POLICY "Criador vê suas perguntas" ON questions FOR SELECT USING (creator_id IN (SELECT id FROM profiles WHERE id = auth.uid()));
+CREATE POLICY "Fã vê suas perguntas enviadas" ON questions FOR SELECT USING (sender_id = auth.uid());
 CREATE POLICY "Respostas públicas visíveis" ON questions FOR SELECT USING (status = 'answered' AND is_shareable = true);
 CREATE POLICY "Webhook insere perguntas" ON questions FOR INSERT WITH CHECK (true);
 CREATE POLICY "Criador responde pergunta" ON questions FOR UPDATE USING (creator_id IN (SELECT id FROM profiles WHERE id = auth.uid()));
+
+-- invite_links:
+ALTER TABLE invite_links ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins gerenciam convites" ON invite_links FOR ALL USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND account_type = 'admin'));
+CREATE POLICY "Usuários leem convites" ON invite_links FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "Usuário usa convite" ON invite_links FOR UPDATE USING (used_by IS NULL) WITH CHECK (auth.uid() = used_by);
 
 -- transactions:
 CREATE POLICY "Criador vê suas transações" ON transactions FOR SELECT USING (question_id IN (SELECT id FROM questions WHERE creator_id IN (SELECT id FROM profiles WHERE id = auth.uid())));
@@ -364,14 +408,30 @@ CREATE OR REPLACE FUNCTION get_top_supporters(p_creator_id UUID)
 RETURNS TABLE (display_name TEXT, is_anonymous BOOLEAN, total_paid DECIMAL, email_hash TEXT) AS $$
 BEGIN
   RETURN QUERY
+  -- Agrupa por sender_id (usuários cadastrados) com fallback para sender_email (perguntas antigas)
   SELECT
-    (array_agg(q.sender_name ORDER BY q.created_at DESC))[1]::TEXT AS display_name,
-    bool_or(q.is_anonymous) AS is_anonymous,
-    SUM(q.price_paid)::DECIMAL AS total_paid,
-    md5(LOWER(TRIM(q.sender_email))) AS email_hash
-  FROM questions q
-  WHERE q.creator_id = p_creator_id AND q.status IN ('pending', 'answered') AND q.created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo') AND q.sender_email IS NOT NULL
-  GROUP BY LOWER(TRIM(q.sender_email))
+    (array_agg(sub.sender_name ORDER BY sub.created_at DESC))[1]::TEXT AS display_name,
+    bool_or(sub.is_anonymous) AS is_anonymous,
+    SUM(sub.price_paid)::DECIMAL AS total_paid,
+    (array_agg(sub.email_hash))[1]::TEXT AS email_hash
+  FROM (
+    SELECT
+      q.sender_name,
+      q.is_anonymous,
+      q.price_paid,
+      q.created_at,
+      COALESCE(q.sender_id::TEXT, LOWER(TRIM(q.sender_email))) AS group_key,
+      COALESCE(
+        (SELECT md5(LOWER(TRIM(au.email))) FROM auth.users au WHERE au.id = q.sender_id),
+        md5(LOWER(TRIM(q.sender_email)))
+      ) AS email_hash
+    FROM questions q
+    WHERE q.creator_id = p_creator_id
+      AND q.status IN ('pending', 'answered')
+      AND q.created_at >= date_trunc('month', NOW() AT TIME ZONE 'America/Sao_Paulo')
+      AND (q.sender_id IS NOT NULL OR q.sender_email IS NOT NULL)
+  ) sub
+  GROUP BY sub.group_key
   ORDER BY total_paid DESC
   LIMIT 5;
 END;
@@ -387,6 +447,9 @@ CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_creator ON payment_intents(creator_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_preference ON payment_intents(mp_preference_id);
 CREATE INDEX IF NOT EXISTS idx_refund_queue_status ON refund_queue(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_questions_sender_id ON questions(sender_id);
+CREATE INDEX IF NOT EXISTS idx_invite_links_code ON invite_links(code);
+CREATE INDEX IF NOT EXISTS idx_profiles_account_type ON profiles(account_type);
 
 -- ============================================================
 -- AGENDAMENTO DE CRON JOBS (PG_CRON)

@@ -32,7 +32,9 @@ export default async function AdminPage() {
     { count: pendingCount },
     { count: answeredCount },
     { count: expiredCount },
-    { count: totalCreators },
+    { count: totalUsers },
+    { count: totalInfluencers },
+    { count: totalFans },
     { count: bannedCreators },
     { count: refundQueueCount },
     { data: creators },
@@ -43,11 +45,14 @@ export default async function AdminPage() {
     supabaseAdmin.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'answered'),
     supabaseAdmin.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'expired'),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_type', 'influencer'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_type', 'fan'),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
     supabaseAdmin.from('refund_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabaseAdmin
       .from('profiles')
-      .select('id, username, avatar_url, is_active, questions_answered_today')
+      .select('id, username, avatar_url, is_active, questions_answered_today, account_type')
+      .eq('account_type', 'influencer')
       .order('questions_answered_today', { ascending: false })
       .limit(20),
   ])
@@ -102,11 +107,12 @@ export default async function AdminPage() {
 
       {/* Row 2: Activity */}
       <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Atividade</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <MetricCard label="Criadores" value={String(totalCreators ?? 0)} />
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
+        <MetricCard label="Usuários" value={String(totalUsers ?? 0)} />
+        <MetricCard label="Influencers" value={String(totalInfluencers ?? 0)} />
+        <MetricCard label="Fãs" value={String(totalFans ?? 0)} />
         <MetricCard label="Perguntas Totais" value={String(totalQuestions)} />
         <MetricCard label="Taxa de Resposta" value={`${answerRate}%`} sub={`${answeredCount ?? 0} respondidas`} />
-        <MetricCard label="Perguntas Pendentes" value={String(pendingCount ?? 0)} />
       </div>
 
       {/* Row 3: Operational */}
@@ -114,13 +120,13 @@ export default async function AdminPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         <MetricCard label="Fila de Reembolsos" value={String(refundQueueCount ?? 0)} sub="Aguardando processamento" />
         <MetricCard label="Perguntas Expiradas" value={String(expiredCount ?? 0)} sub={`Sem resposta em ${platformSettings.response_deadline_hours}h`} />
-        <MetricCard label="Criadores Banidos" value={String(bannedCreators ?? 0)} sub={`de ${totalCreators ?? 0} total`} />
+        <MetricCard label="Usuários Banidos" value={String(bannedCreators ?? 0)} sub={`de ${totalUsers ?? 0} total`} />
       </div>
 
       {/* Creators table */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-gray-900">Top Criadores</h2>
-        <Link href="/admin/creators" className="text-sm text-[#DD2A7B] font-medium hover:underline">
+        <Link href="/admin/influencers" className="text-sm text-[#DD2A7B] font-medium hover:underline">
           Ver todos
         </Link>
       </div>
@@ -158,7 +164,7 @@ export default async function AdminPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/admin/creators/${creator.id}`} className="text-[#DD2A7B] text-xs font-semibold hover:underline">
+                    <Link href={`/admin/influencers/${creator.id}`} className="text-[#DD2A7B] text-xs font-semibold hover:underline">
                       Ver
                     </Link>
                   </td>

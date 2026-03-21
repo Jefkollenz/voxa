@@ -78,7 +78,7 @@ export default function CreatorParamsForm({
 
     let res: Response, data: { error?: string }
     try {
-      res = await fetch(`/api/admin/creators/${creatorId}/params`, {
+      res = await fetch(`/api/admin/influencers/${creatorId}/params`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

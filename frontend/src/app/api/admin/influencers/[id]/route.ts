@@ -37,11 +37,11 @@ export async function PATCH(
   // Impede banir outro admin
   const { data: target } = await supabaseAdmin
     .from('profiles')
-    .select('is_admin')
+    .select('account_type')
     .eq('id', params.id)
     .single()
 
-  if (target?.is_admin) {
+  if (target?.account_type === 'admin') {
     return NextResponse.json({ error: 'Não é possível alterar o status de outro admin' }, { status: 422 })
   }
 

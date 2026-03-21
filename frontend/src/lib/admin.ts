@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Verifica se o usuário autenticado tem is_admin = true.
+ * Verifica se o usuário autenticado tem account_type = 'admin'.
  * Retorna o user object se for admin, null caso contrário.
  * Usar em API Routes para verificação de autorização.
  */
@@ -11,14 +11,14 @@ export async function getAdminUser() {
   if (!user) return null
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('account_type')
     .eq('id', user.id)
     .single()
-  return profile?.is_admin ? user : null
+  return profile?.account_type === 'admin' ? user : null
 }
 
 /**
- * Verifica se o usuário autenticado tem is_admin = true.
+ * Verifica se o usuário autenticado tem account_type = 'admin'.
  * Para uso em Server Components (defense in depth além do middleware).
  * Retorna o user ID se for admin, null caso contrário.
  */
@@ -28,8 +28,8 @@ export async function requireAdmin(): Promise<string | null> {
   if (!user) return null
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('account_type')
     .eq('id', user.id)
     .single()
-  return profile?.is_admin ? user.id : null
+  return profile?.account_type === 'admin' ? user.id : null
 }

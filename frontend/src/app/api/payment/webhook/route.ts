@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     }
     if (!signatureResult) {
       console.error('[webhook] Assinatura inválida — request rejeitado')
-      return NextResponse.json({ received: true }) // 200 para não revelar o motivo da rejeição
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
       payment = await paymentClient.get({ id: String(paymentId) })
     } catch (mpError: any) {
       console.error('[webhook] Erro ao buscar payment no MP:', mpError?.message || mpError)
-      // Retornar 200 para o MP não retentar indefinidamente em caso de falha temporária
-      return NextResponse.json({ received: true })
+      // Retornar 500 para que o MP retente — idempotência protege contra duplicatas
+      return NextResponse.json({ error: 'MP API error' }, { status: 500 })
     }
 
     if (!payment || payment.status !== 'approved') {
@@ -169,6 +169,7 @@ export async function POST(request: Request) {
       .from('questions')
       .insert({
         creator_id: qd.creator_id,
+        sender_id: qd.sender_id ?? null,
         sender_name: qd.sender_name,
         sender_email: qd.sender_email ?? null,
         content: qd.content,
@@ -259,7 +260,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true })
   } catch (error: any) {
     console.error('[webhook] Erro inesperado:', error)
-    // Retornar 200 para o MP não retentar indefinidamente
-    return NextResponse.json({ received: true })
+    // Retornar 500 para que o MP retente — idempotência protege contra duplicatas
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

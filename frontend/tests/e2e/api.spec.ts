@@ -139,8 +139,8 @@ test.describe('Proteção de rotas autenticadas da API', () => {
     expect([401, 403]).toContain(res.status())
   })
 
-  test('PATCH /api/admin/creators/[id] sem auth retorna 401', async ({ request }) => {
-    const res = await request.patch('/api/admin/creators/00000000-0000-0000-0000-000000000000', {
+  test('PATCH /api/admin/influencers/[id] sem auth retorna 401', async ({ request }) => {
+    const res = await request.patch('/api/admin/influencers/00000000-0000-0000-0000-000000000000', {
       data: { is_active: false },
     })
     expect([401, 403]).toContain(res.status())

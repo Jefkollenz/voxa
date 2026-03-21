@@ -40,11 +40,14 @@ export default async function HistoryPage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, username')
+    .select('id, username, account_type')
     .eq('id', user.id)
     .single()
 
   if (!profile) redirect('/setup')
+
+  // Somente influencers/admins acessam o histórico de criador
+  if (profile.account_type === 'fan') redirect('/dashboard')
 
   const periodo = searchParams.periodo ?? 'tudo'
   const page = Math.max(1, Number(searchParams.page ?? '1'))
@@ -293,7 +296,7 @@ export default async function HistoryPage({
         )}
       </main>
 
-      <BottomNav username={profile.username} />
+      <BottomNav username={profile.username} accountType={profile.account_type ?? 'influencer'} dashboardMode="creator" />
     </div>
   )
 }

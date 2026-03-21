@@ -4,22 +4,36 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import DashboardModeToggle from './DashboardModeToggle'
 
 type HeaderProps = {
-  username?: string;
-  hideDesktopNav?: boolean;
+  username?: string
+  hideDesktopNav?: boolean
+  accountType?: string
+  dashboardMode?: 'fan' | 'creator'
+  onModeChange?: (mode: 'fan' | 'creator') => void
 }
 
-export default function Header({ username, hideDesktopNav = false }: HeaderProps) {
+export default function Header({ username, hideDesktopNav = false, accountType, dashboardMode, onModeChange }: HeaderProps) {
   const pathname = usePathname()
   const router = useRouter()
 
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'Meu Perfil', path: username ? `/perfil/${username}` : '#' },
-    { name: 'Histórico', path: '/dashboard/history' },
-    { name: 'Configurações', path: '/dashboard/settings' },
-  ]
+  const isInfluencer = accountType === 'influencer' || accountType === 'admin'
+  const isFanMode = !isInfluencer || dashboardMode === 'fan'
+
+  const navItems = isFanMode
+    ? [
+        { name: 'Dashboard', path: '/dashboard' },
+        { name: 'Perguntas', path: '/dashboard/questions' },
+        { name: 'Gastos', path: '/dashboard/spending' },
+        { name: 'Perfil', path: '/dashboard/profile' },
+      ]
+    : [
+        { name: 'Dashboard', path: '/dashboard' },
+        { name: 'Meu Perfil', path: username ? `/perfil/${username}` : '#' },
+        { name: 'Histórico', path: '/dashboard/history' },
+        { name: 'Configurações', path: '/dashboard/settings' },
+      ]
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -30,11 +44,14 @@ export default function Header({ username, hideDesktopNav = false }: HeaderProps
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
       <div className="max-w-4xl mx-auto px-4 lg:px-0 h-16 flex justify-between items-center">
-        {/* Logo */}
+        {/* Logo + Mode Toggle */}
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="font-bold text-xl text-transparent bg-clip-text bg-gradient-instagram">
             VOXA
           </Link>
+          {isInfluencer && dashboardMode && onModeChange && (
+            <DashboardModeToggle mode={dashboardMode} onModeChange={onModeChange} />
+          )}
         </div>
 
         {/* Desktop Navigation */}
