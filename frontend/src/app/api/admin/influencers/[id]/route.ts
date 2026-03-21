@@ -28,13 +28,13 @@ export async function PATCH(
   }
 
   const body = await request.json()
-  const { is_active } = body
+  const { is_active, is_verified } = body
 
-  if (typeof is_active !== 'boolean') {
-    return NextResponse.json({ error: 'Campo is_active obrigatório (boolean)' }, { status: 400 })
+  if (typeof is_active !== 'boolean' && typeof is_verified !== 'boolean') {
+    return NextResponse.json({ error: 'Campo is_active ou is_verified obrigatório (boolean)' }, { status: 400 })
   }
 
-  // Impede banir outro admin
+  // Impede alterar outro admin
   const { data: target } = await supabaseAdmin
     .from('profiles')
     .select('account_type')
@@ -45,16 +45,25 @@ export async function PATCH(
     return NextResponse.json({ error: 'Não é possível alterar o status de outro admin' }, { status: 422 })
   }
 
+  const updates: Record<string, boolean> = {}
+  if (typeof is_active === 'boolean') updates.is_active = is_active
+  if (typeof is_verified === 'boolean') updates.is_verified = is_verified
+
   const { error } = await supabaseAdmin
     .from('profiles')
-    .update({ is_active })
+    .update(updates)
     .eq('id', params.id)
 
   if (error) {
     return NextResponse.json({ error: 'Erro ao atualizar perfil' }, { status: 500 })
   }
 
-  console.log(`[admin/audit] Admin ${admin.id} ${is_active ? 'reativou' : 'baniu'} criador ${params.id}`)
+  if (typeof is_active === 'boolean') {
+    console.log(`[admin/audit] Admin ${admin.id} ${is_active ? 'reativou' : 'baniu'} criador ${params.id}`)
+  }
+  if (typeof is_verified === 'boolean') {
+    console.log(`[admin/audit] Admin ${admin.id} ${is_verified ? 'verificou' : 'removeu verificação de'} criador ${params.id}`)
+  }
 
-  return NextResponse.json({ success: true, is_active })
+  return NextResponse.json({ success: true, ...updates })
 }

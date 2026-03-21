@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/admin'
 import { getPlatformSettings, effectiveCreatorRate } from '@/lib/platform-settings'
 import VerifiedBadge from '@/components/VerifiedBadge'
 import BanToggle from './BanToggle'
+import VerifyToggle from './VerifyToggle'
 import RefundButton from './RefundButton'
 import CreatorParamsForm from './CreatorParamsForm'
 
@@ -101,6 +102,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
               <span className="w-2 h-2 rounded-full bg-[#16A34A]"></span> Ativo
             </span>
           )}
+          <VerifyToggle creatorId={profile.id} isVerified={!!profile.is_verified} username={profile.username} />
           <BanToggle creatorId={profile.id} isActive={profile.is_active !== false} username={profile.username} />
           <a
             href={`/perfil/${profile.username}`}
