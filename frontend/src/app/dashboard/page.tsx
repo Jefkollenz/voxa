@@ -60,6 +60,16 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    // Se veio de um fluxo OAuth com returnUrl pendente, redirecionar de volta
+    const pendingReturnUrl = sessionStorage.getItem('voxa_return_url')
+    if (pendingReturnUrl) {
+      sessionStorage.removeItem('voxa_return_url')
+      if (pendingReturnUrl.startsWith('/') && !pendingReturnUrl.startsWith('//')) {
+        router.push(pendingReturnUrl)
+        return
+      }
+    }
+
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()

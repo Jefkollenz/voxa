@@ -23,20 +23,18 @@ function LoginContent() {
     setIsLoading(true)
     setError('')
 
-    // Propagar returnUrl e inviteCode pelo fluxo OAuth
+    // Salvar returnUrl e inviteCode em storage para recuperar após OAuth
+    // (callback URL deve ser limpo para match com redirect URLs do Supabase)
     const returnUrl = searchParams.get('returnUrl') || ''
     const inviteCode = searchParams.get('inviteCode') || ''
-    const callbackParams = new URLSearchParams()
-    if (returnUrl) callbackParams.set('returnUrl', returnUrl)
-    if (inviteCode) callbackParams.set('inviteCode', inviteCode)
-    const callbackQuery = callbackParams.toString()
-    const callbackUrl = `${window.location.origin}/auth/callback${callbackQuery ? `?${callbackQuery}` : ''}`
+    if (returnUrl) sessionStorage.setItem('voxa_return_url', returnUrl)
+    if (inviteCode) localStorage.setItem('voxa_invite_code', inviteCode)
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: callbackUrl,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
     if (error) {
