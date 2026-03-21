@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Header from '@/components/Header'
 
 export default function ReferralDashboardPage() {
   const router = useRouter()
@@ -43,9 +42,6 @@ export default function ReferralDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header username={username} />
-
       <main className="flex-1 max-w-5xl mx-auto w-full p-6 py-10">
         <div className="mb-10 text-center">
           <h2 className="text-3xl font-extrabold text-gray-900 mb-3">Programa de Afiliados</h2>
@@ -97,6 +93,5 @@ export default function ReferralDashboardPage() {
           </div>
         </div>
       </main>
-    </div>
   )
 }

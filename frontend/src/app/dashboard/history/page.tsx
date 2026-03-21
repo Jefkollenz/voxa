@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import VisibilityToggle from './VisibilityToggle'
-import BottomNav from '@/components/BottomNav'
-import Header from '@/components/Header'
 import { CREATOR_NET_RATE } from '@/lib/constants'
 
 // Revalidar dados a cada 30s — evita queries em cada request
@@ -136,9 +134,6 @@ export default async function HistoryPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header username={profile.username} />
-
       <main className="max-w-5xl mx-auto px-4 py-8 w-full">
         {/* Métricas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -295,8 +290,5 @@ export default async function HistoryPage({
           </div>
         )}
       </main>
-
-      <BottomNav username={profile.username} accountType={profile.account_type ?? 'influencer'} dashboardMode="creator" />
-    </div>
   )
 }

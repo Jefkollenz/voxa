@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import BottomNav from '@/components/BottomNav'
-import Header from '@/components/Header'
 import { CREATOR_NET_RATE, MP_PROCESSING_FEE_ESTIMATE } from '@/lib/constants'
 import AvatarCropModal from './AvatarCropModal'
 
@@ -215,24 +213,19 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        <Header username={username} />
-        <main className="max-w-2xl mx-auto px-4 py-8 space-y-6 w-full">
-          {[0, 1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-              <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-4" />
-              <div className="h-10 w-full bg-gray-100 rounded-xl animate-pulse" />
-            </div>
-          ))}
-        </main>
-      </div>
+      <main className="max-w-2xl mx-auto px-4 py-8 space-y-6 w-full">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="h-5 w-40 bg-gray-200 rounded animate-pulse mb-4" />
+            <div className="h-10 w-full bg-gray-100 rounded-xl animate-pulse" />
+          </div>
+        ))}
+      </main>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header username={username} />
-
+    <>
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6 w-full">
 
         {/* Admin Panel */}
@@ -500,8 +493,6 @@ export default function SettingsPage() {
           onCancel={handleCropCancel}
         />
       )}
-
-      {username && <BottomNav username={username} accountType="influencer" dashboardMode="creator" />}
-    </div>
+    </>
   )
 }
