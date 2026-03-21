@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Camera } from 'lucide-react'
+import { trackFanSignUp } from '@/lib/analytics'
 
 const RESERVED_USERNAMES = new Set([
   'admin', 'api', 'dashboard', 'login', 'setup', 'perfil', 'vender',
@@ -134,6 +135,8 @@ function SetupContent() {
       setIsLoading(false)
       return
     }
+
+    trackFanSignUp()
 
     // Checar invite code dos query params (passado pelo auth callback) ou localStorage (via /invite/[code])
     const inviteCode = searchParams.get('inviteCode') || localStorage.getItem('voxa_invite_code')

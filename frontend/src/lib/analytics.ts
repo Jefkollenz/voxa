@@ -186,6 +186,31 @@ export function trackPaymentPending(creatorUsername: string, amount?: number) {
   })
 }
 
+// ─── Funil de autenticação (fã não logado tentando comprar) ───────────────────
+
+/**
+ * Modal de login exibido quando fã tenta pagar sem estar logado.
+ * Marca o ponto exato de fricção no funil.
+ */
+export function trackLoginPromptShown(creatorUsername: string, mode: 'question' | 'support', amount: number) {
+  gtag('event', 'login_prompt_shown', {
+    creator_username: creatorUsername,
+    mode,
+    value: amount,
+    currency: 'BRL',
+  })
+}
+
+/**
+ * Fã completou cadastro na plataforma (/setup).
+ * sign_up é evento padrão GA4 para relatórios de aquisição.
+ */
+export function trackFanSignUp() {
+  gtag('event', 'sign_up', {
+    method: 'google_oauth',
+  })
+}
+
 // ─── Onboarding do Criador ────────────────────────────────────────────────────
 
 export function trackCreatorSetupComplete(username: string, minPrice: number) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShieldCheck, Heart, X } from 'lucide-react'
 import { RESPONSE_DEADLINE_HOURS } from '@/lib/constants'
-import { trackFormStart, trackPaymentInitiated } from '@/lib/analytics'
+import { trackFormStart, trackPaymentInitiated, trackLoginPromptShown } from '@/lib/analytics'
 import { createClient } from '@/lib/supabase/client'
 
 type FastAskSuggestion = {
@@ -182,6 +182,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
     // Se não autenticado: salvar dados e mostrar modal de login
     if (!isAuthenticated) {
       saveFormToSession()
+      trackLoginPromptShown(username, isSupport ? 'support' : 'question', finalAmount)
       setShowLoginModal(true)
       return
     }

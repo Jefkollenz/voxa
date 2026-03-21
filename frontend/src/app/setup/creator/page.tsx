@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { CREATOR_NET_RATE, MP_PROCESSING_FEE_ESTIMATE } from '@/lib/constants'
+import { trackCreatorSetupComplete } from '@/lib/analytics'
 
 function getPriceBenchmark(price: number): string {
   if (price < 15) return 'Abaixo da média — pode deixar dinheiro na mesa'
@@ -80,6 +81,7 @@ export default function CreatorSetupPage() {
       setError('Erro ao configurar perfil. Tente novamente.')
       setIsLoading(false)
     } else {
+      trackCreatorSetupComplete(username, minPrice)
       router.push('/dashboard')
     }
   }
