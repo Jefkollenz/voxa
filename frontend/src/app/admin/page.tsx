@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -37,6 +39,7 @@ export default async function AdminPage() {
     { count: totalFans },
     { count: bannedCreators },
     { count: refundQueueCount },
+    { count: pendingReportsCount },
     { data: creators },
   ] = await Promise.all([
     supabaseAdmin.from('transactions').select('amount, processing_fee, platform_fee, creator_net').eq('status', 'approved'),
@@ -49,6 +52,7 @@ export default async function AdminPage() {
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_type', 'fan'),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
     supabaseAdmin.from('refund_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabaseAdmin.from('question_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending_review'),
     supabaseAdmin
       .from('profiles')
       .select('id, username, avatar_url, is_active, questions_answered_today, account_type')
@@ -117,9 +121,10 @@ export default async function AdminPage() {
 
       {/* Row 3: Operational */}
       <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Saúde Operacional</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
         <MetricCard label="Fila de Reembolsos" value={String(refundQueueCount ?? 0)} sub="Aguardando processamento" />
         <MetricCard label="Perguntas Expiradas" value={String(expiredCount ?? 0)} sub={`Sem resposta em ${platformSettings.response_deadline_hours}h`} />
+        <MetricCard label="Denúncias Pendentes" value={String(pendingReportsCount ?? 0)} sub="Aguardando moderação" />
         <MetricCard label="Usuários Banidos" value={String(bannedCreators ?? 0)} sub={`de ${totalUsers ?? 0} total`} />
       </div>
 
