@@ -461,3 +461,120 @@ CREATE INDEX IF NOT EXISTS idx_profiles_account_type ON profiles(account_type);
 -- SELECT cron.schedule('reset-daily-counts', '0 3 * * *', $$SELECT reset_daily_question_counts()$$);
 -- SELECT cron.schedule('expire-questions', '*/30 * * * *', $$SELECT expire_pending_questions()$$);
 -- SELECT cron.schedule('cleanup-payment-intents', '0 1 * * *', $$SELECT cleanup_stale_payment_intents()$$);
+
+-- ============================================================
+-- SISTEMA DE DENÚNCIAS (QUESTION REPORTS)
+-- ============================================================
+
+-- Novo status para perguntas denunciadas
+ALTER TYPE question_status ADD VALUE 'reported';
+
+-- Tabela de denúncias de perguntas
+CREATE TABLE question_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL CHECK (reason IN ('offensive', 'harassment', 'spam', 'threat', 'other')),
+    reason_detail TEXT,
+    status TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK (status IN ('pending_review', 'admin_approved', 'dismissed')),
+    reviewed_by UUID REFERENCES profiles(id),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE question_reports ENABLE ROW LEVEL SECURITY;
+
+-- Criador vê seus próprios reports
+CREATE POLICY "Criador vê seus reports" ON question_reports
+    FOR SELECT USING (creator_id = auth.uid());
+
+-- Criador cria report sobre suas perguntas
+CREATE POLICY "Criador cria report" ON question_reports
+    FOR INSERT WITH CHECK (creator_id = auth.uid());
+
+-- Admins veem todos os reports
+CREATE POLICY "Admin vê todos reports" ON question_reports
+    FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND account_type = 'admin'));
+
+-- Índices de performance
+CREATE INDEX IF NOT EXISTS idx_question_reports_status ON question_reports(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_question_reports_question ON question_reports(question_id);
+
+-- Trigger de timestamp
+CREATE TRIGGER trg_question_reports_updated_at BEFORE UPDATE ON question_reports
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- ============================================================
+-- VERIFICAÇÃO DE IDENTIDADE (CREATOR VERIFICATION)
+-- ============================================================
+
+-- Novo campo no profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+
+-- Proteger is_verified contra alteração via client (apenas service_role)
+CREATE OR REPLACE FUNCTION protect_profile_admin_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF current_setting('role', true) != 'service_role' THEN
+    IF NEW.account_type IS DISTINCT FROM OLD.account_type THEN
+      RAISE EXCEPTION 'Não é permitido alterar account_type diretamente';
+    END IF;
+    IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_admin diretamente';
+    END IF;
+    IF NEW.is_verified IS DISTINCT FROM OLD.is_verified THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_verified diretamente';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Tabela de solicitações de verificação
+CREATE TABLE verification_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    social_link TEXT NOT NULL,
+    document_url TEXT NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    rejection_reason TEXT,
+    reviewed_by UUID REFERENCES profiles(id),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE verification_requests ENABLE ROW LEVEL SECURITY;
+
+-- Criador vê suas próprias solicitações
+CREATE POLICY "Criador vê suas verificações" ON verification_requests
+    FOR SELECT USING (creator_id = auth.uid());
+
+-- Criador cria solicitação de verificação
+CREATE POLICY "Criador solicita verificação" ON verification_requests
+    FOR INSERT WITH CHECK (creator_id = auth.uid());
+
+-- Admins veem todas as solicitações
+CREATE POLICY "Admin vê todas verificações" ON verification_requests
+    FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND account_type = 'admin'));
+
+-- Índices de performance
+CREATE INDEX IF NOT EXISTS idx_verification_requests_status ON verification_requests(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_verification_requests_creator ON verification_requests(creator_id);
+
+-- Trigger de timestamp
+CREATE TRIGGER trg_verification_requests_updated_at BEFORE UPDATE ON verification_requests
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- Bucket privado para documentos de verificação
+INSERT INTO storage.buckets (id, name, public) VALUES ('verification-docs', 'verification-docs', false) ON CONFLICT DO NOTHING;
+
+-- Criador faz upload na própria pasta
+CREATE POLICY "Criador upload verificação" ON storage.objects
+    FOR INSERT WITH CHECK (bucket_id = 'verification-docs' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- Admins leem documentos de verificação
+CREATE POLICY "Admin lê docs verificação" ON storage.objects
+    FOR SELECT USING (bucket_id = 'verification-docs' AND EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND account_type = 'admin'));

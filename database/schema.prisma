@@ -18,6 +18,7 @@ model Profile {
   referred_by_id           String?
   is_admin                 Boolean         @default(false)
   is_active                Boolean         @default(true)
+  is_verified              Boolean         @default(false)
   // Individual overrides — null = use platform default from platform_settings
   custom_creator_rate      Decimal?        @db.Decimal(5, 4)
   custom_deadline_hours    Int?
@@ -28,6 +29,7 @@ model Profile {
   referrals                Profile[]       @relation("Referrals")
   questions                Question[]
   payment_intents          PaymentIntent[]
+  verification_requests    VerificationRequest[]
 
   @@map("profiles")
 }
@@ -117,4 +119,22 @@ model RefundQueue {
   processed_at  DateTime?
 
   @@map("refund_queue")
+}
+
+// Solicitações de verificação de identidade de criadores.
+// Criador envia link de rede social + documento; admin aprova ou rejeita.
+model VerificationRequest {
+  id               String    @id @default(uuid())
+  creator_id       String
+  creator          Profile   @relation(fields: [creator_id], references: [id], onDelete: Cascade)
+  social_link      String
+  document_url     String
+  status           String    @default("pending") // pending | approved | rejected
+  rejection_reason String?
+  reviewed_by      String?
+  reviewed_at      DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  @@map("verification_requests")
 }

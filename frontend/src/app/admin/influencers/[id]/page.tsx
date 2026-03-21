@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin'
 import { getPlatformSettings, effectiveCreatorRate } from '@/lib/platform-settings'
+import VerifiedBadge from '@/components/VerifiedBadge'
 import BanToggle from './BanToggle'
 import RefundButton from './RefundButton'
 import CreatorParamsForm from './CreatorParamsForm'
@@ -19,7 +20,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
   const [{ data: profile }, { data: questions }, platformSettings] = await Promise.all([
     supabaseAdmin
       .from('profiles')
-      .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, created_at')
+      .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, created_at')
       .eq('id', params.id)
       .single(),
     supabaseAdmin
@@ -85,7 +86,7 @@ export default async function AdminCreatorDetailPage({ params }: { params: { id:
         <div className="flex items-center gap-4">
           <img src={avatarUrl} alt={profile.username} className="w-16 h-16 rounded-full object-cover" />
           <div>
-            <h1 className="text-xl font-bold text-gray-900">@{profile.username}</h1>
+            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-1.5">@{profile.username} <VerifiedBadge isVerified={!!profile.is_verified} size="md" /></h1>
             {profile.bio && <p className="text-sm text-gray-500 mt-0.5 max-w-md">{profile.bio}</p>}
             <p className="text-xs text-gray-500 mt-1">Cadastro: {joinedAt}</p>
           </div>

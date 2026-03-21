@@ -294,6 +294,18 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Verificação */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-lg mb-1">Verificação de identidade</h2>
+          <p className="text-sm text-gray-500 mb-4">Confirme sua identidade e receba a badge de verificado no seu perfil.</p>
+          <a
+            href="/dashboard/verification"
+            className="flex items-center justify-center w-full min-h-[44px] bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            Gerenciar verificação
+          </a>
+        </div>
+
         {/* Bio */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="font-bold text-lg mb-4">Bio</h2>

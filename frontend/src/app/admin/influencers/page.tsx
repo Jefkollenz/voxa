@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin'
+import VerifiedBadge from '@/components/VerifiedBadge'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,7 +15,7 @@ export default async function AdminCreatorsPage() {
 
   const { data: creators } = await supabaseAdmin
     .from('profiles')
-    .select('id, username, avatar_url, is_active, questions_answered_today, min_price, created_at')
+    .select('id, username, avatar_url, is_active, is_verified, questions_answered_today, min_price, created_at')
     .eq('account_type', 'influencer')
     .order('created_at', { ascending: false })
 
@@ -43,7 +44,7 @@ export default async function AdminCreatorsPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <img src={avatarUrl} alt={creator.username} className="w-8 h-8 rounded-full object-cover" />
-                      <span className="font-medium text-gray-900">@{creator.username}</span>
+                      <span className="font-medium text-gray-900 flex items-center gap-1">@{creator.username} <VerifiedBadge isVerified={!!creator.is_verified} size="sm" /></span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right text-gray-600">
