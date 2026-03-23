@@ -43,6 +43,11 @@ export default function SettingsPage() {
   const [successMessage, setSuccessMessage] = useState('')
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
 
+  // Pausa programada
+  const [isPaused, setIsPaused] = useState(false)
+  const [pausedUntil, setPausedUntil] = useState<string | null>(null)
+  const [isTogglingPause, setIsTogglingPause] = useState(false)
+
   // Fast Ask
   const [suggestions, setSuggestions] = useState<FastAskSuggestion[]>(DEFAULT_SUGGESTIONS)
 
@@ -54,7 +59,7 @@ export default function SettingsPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions, is_admin, account_type')
+        .select('username, bio, avatar_url, min_price, daily_limit, fast_ask_suggestions, is_admin, account_type, is_paused, paused_until')
         .eq('id', user.id)
         .single()
 
@@ -70,6 +75,18 @@ export default function SettingsPage() {
       setDailyLimit(profile.daily_limit ?? 10)
       setAvatarUrl(profile.avatar_url ?? '')
       setIsAdmin(!!profile.is_admin)
+
+      // Pausa programada
+      const paused = !!profile.is_paused
+      const until = profile.paused_until as string | null
+      // Se a pausa já expirou, considerar como despausado
+      if (paused && until && new Date(until) <= new Date()) {
+        setIsPaused(false)
+        setPausedUntil(null)
+      } else {
+        setIsPaused(paused)
+        setPausedUntil(until)
+      }
 
       // BUG FIX: fast_ask_suggestions pode vir null do Supabase antes da migration
       // Array.isArray garante que não quebra se a coluna ainda não existir
@@ -153,6 +170,51 @@ export default function SettingsPage() {
 
   const removeSuggestion = (index: number) => {
     setSuggestions(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleTogglePause = async (pauseFor?: number) => {
+    setIsTogglingPause(true)
+    setError('')
+
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    if (isPaused) {
+      // Despausar
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ is_paused: false, paused_until: null })
+        .eq('id', user.id)
+
+      if (updateError) {
+        setError('Erro ao reativar perguntas.')
+      } else {
+        setIsPaused(false)
+        setPausedUntil(null)
+        showSuccess('Perguntas reativadas!')
+      }
+    } else {
+      // Pausar
+      const until = pauseFor
+        ? new Date(Date.now() + pauseFor * 60 * 60 * 1000).toISOString()
+        : null
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ is_paused: true, paused_until: until })
+        .eq('id', user.id)
+
+      if (updateError) {
+        setError('Erro ao pausar perguntas.')
+      } else {
+        setIsPaused(true)
+        setPausedUntil(until)
+        showSuccess(until ? `Perguntas pausadas por ${pauseFor}h!` : 'Perguntas pausadas indefinidamente!')
+      }
+    }
+
+    setIsTogglingPause(false)
   }
 
   const handleSave = async () => {
@@ -361,6 +423,76 @@ export default function SettingsPage() {
           <p className="text-sm text-gray-500 mt-3">
             Potencial mensal estimado: <span className="font-bold text-green-600">R$ {netMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> <span className="text-xs text-gray-400">(após taxa Voxa + ~1,2% processamento MP)</span>
           </p>
+        </div>
+
+        {/* Pausa programada */}
+        <div className={`rounded-2xl p-6 shadow-sm border ${isPaused ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
+          <div className="flex items-start justify-between mb-1">
+            <h2 className="font-bold text-lg">Pausar perguntas</h2>
+            {isPaused && (
+              <span className="text-xs font-semibold bg-red-100 text-red-600 px-2 py-1 rounded-full">
+                Pausado
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            {isPaused
+              ? pausedUntil
+                ? `Suas perguntas estão pausadas até ${new Date(pausedUntil).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`
+                : 'Suas perguntas estão pausadas indefinidamente.'
+              : 'Pause temporariamente o recebimento de novas perguntas. Fãs verão que você está indisponível.'}
+          </p>
+
+          {isPaused ? (
+            <button
+              type="button"
+              onClick={() => handleTogglePause()}
+              disabled={isTogglingPause}
+              className="w-full min-h-[44px] bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isTogglingPause ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              )}
+              {isTogglingPause ? 'Reativando...' : 'Reativar perguntas'}
+            </button>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleTogglePause(24)}
+                disabled={isTogglingPause}
+                className="min-h-[44px] bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50 text-sm"
+              >
+                {isTogglingPause ? 'Pausando...' : 'Pausar 24h'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTogglePause(48)}
+                disabled={isTogglingPause}
+                className="min-h-[44px] bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50 text-sm"
+              >
+                {isTogglingPause ? 'Pausando...' : 'Pausar 48h'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTogglePause(72)}
+                disabled={isTogglingPause}
+                className="min-h-[44px] border-2 border-red-300 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50 text-sm"
+              >
+                {isTogglingPause ? 'Pausando...' : 'Pausar 72h'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTogglePause()}
+                disabled={isTogglingPause}
+                className="min-h-[44px] border-2 border-red-300 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition-colors disabled:opacity-50 text-sm"
+              >
+                {isTogglingPause ? 'Pausando...' : 'Indefinido'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── FAST ASK ── */}

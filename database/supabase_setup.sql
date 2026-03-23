@@ -617,3 +617,40 @@ WHERE id IN (
   ORDER BY created_at ASC
   LIMIT 50
 );
+
+-- ============================================================
+-- PAUSA PROGRAMADA (CREATOR PAUSE)
+-- ============================================================
+
+-- Novos campos no profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS paused_until TIMESTAMPTZ;
+
+-- Atualizar can_accept_question() para checar pausa
+CREATE OR REPLACE FUNCTION can_accept_question(p_creator_id UUID)
+RETURNS boolean AS $$
+DECLARE
+  v_daily_limit integer;
+  v_answered_today integer;
+  v_pending_intents integer;
+  v_is_paused boolean;
+  v_paused_until timestamptz;
+BEGIN
+  SELECT daily_limit, questions_answered_today, is_paused, paused_until
+    INTO v_daily_limit, v_answered_today, v_is_paused, v_paused_until
+    FROM profiles WHERE id = p_creator_id FOR UPDATE;
+
+  -- Se está pausado e a pausa ainda não expirou, rejeita
+  IF v_is_paused = TRUE THEN
+    IF v_paused_until IS NULL OR v_paused_until > NOW() THEN
+      RETURN FALSE;
+    ELSE
+      -- Pausa expirou: despausa automaticamente
+      UPDATE profiles SET is_paused = FALSE, paused_until = NULL WHERE id = p_creator_id;
+    END IF;
+  END IF;
+
+  SELECT COUNT(*) INTO v_pending_intents FROM payment_intents WHERE creator_id = p_creator_id AND created_at > NOW() - INTERVAL '2 hours';
+  RETURN (v_answered_today + v_pending_intents) < v_daily_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

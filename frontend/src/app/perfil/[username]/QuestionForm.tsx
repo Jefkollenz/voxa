@@ -25,6 +25,7 @@ type Props = {
   avatarUrl: string
   displayName: string
   disabled: boolean
+  disabledReason?: 'limit' | 'paused'
   fastAskSuggestions?: FastAskSuggestion[]
   isAuthenticated: boolean
   userProfile: UserProfile | null
@@ -40,7 +41,7 @@ const DEFAULT_FAST_ASK: FastAskSuggestion[] = [
   { label: '🌟 Recomendação', question: 'Qual é a sua recomendação exclusiva para quem quer se destacar nessa área?', amount: 15 },
 ]
 
-export default function QuestionForm({ username, minPrice, displayName, disabled, fastAskSuggestions, isAuthenticated, userProfile }: Props) {
+export default function QuestionForm({ username, minPrice, displayName, disabled, disabledReason = 'limit', fastAskSuggestions, isAuthenticated, userProfile }: Props) {
   const router = useRouter()
 
   // BUG FIX: garante que minPrice é sempre um número positivo válido
@@ -242,8 +243,17 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
   if (disabled) {
     return (
       <div className="p-8 text-center relative z-10">
-        <p className="text-gray-500">Este criador atingiu o limite de perguntas de hoje.</p>
-        <p className="text-gray-500 text-sm mt-1">Volte amanhã para enviar sua pergunta.</p>
+        {disabledReason === 'paused' ? (
+          <>
+            <p className="text-yellow-400 font-semibold">Este criador pausou o recebimento de perguntas.</p>
+            <p className="text-gray-500 text-sm mt-1">Aguarde até que ele reative para enviar sua pergunta.</p>
+          </>
+        ) : (
+          <>
+            <p className="text-gray-500">Este criador atingiu o limite de perguntas de hoje.</p>
+            <p className="text-gray-500 text-sm mt-1">Volte amanhã para enviar sua pergunta.</p>
+          </>
+        )}
       </div>
     )
   }

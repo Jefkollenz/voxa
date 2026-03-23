@@ -23,6 +23,8 @@ type Profile = {
   is_active: boolean | null
   is_verified?: boolean
   is_founder?: boolean
+  is_paused?: boolean
+  paused_until?: string | null
   fast_ask_suggestions?: Array<{ label: string; question: string; amount: number }>
 }
 
@@ -264,7 +266,7 @@ export default async function PerfilPage({
 
   const { data: profileRaw } = await supabase
     .from('profiles')
-    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, is_founder, fast_ask_suggestions, creator_setup_completed, account_type')
+    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, is_founder, is_paused, paused_until, fast_ask_suggestions, creator_setup_completed, account_type')
     .eq('username', params.username)
     .single()
 
@@ -308,6 +310,10 @@ export default async function PerfilPage({
       </div>
     )
   }
+
+  // Checar se o criador está com perguntas pausadas
+  const creatorIsPaused = profile.is_paused === true &&
+    (!profile.paused_until || new Date(profile.paused_until) > new Date())
 
   const [{ data: publicAnswers }, { data: statsData }, { data: topSupporters }] = await Promise.all([
     supabase
@@ -377,7 +383,14 @@ export default async function PerfilPage({
               <MilestoneBadgeRow milestones={milestones} size="md" />
             </div>
           )}
-          {questionsLeft > 0 ? (
+          {creatorIsPaused ? (
+            <div className="inline-flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 rounded-full text-xs font-semibold text-yellow-400">
+              <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+              {profile.paused_until
+                ? `Volta em ${new Date(profile.paused_until).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+                : 'Perguntas temporariamente pausadas'}
+            </div>
+          ) : questionsLeft > 0 ? (
             <div className="inline-flex items-center gap-1.5 bg-[#DD2A7B]/10 border border-[#DD2A7B]/20 px-3 py-1 rounded-full text-xs font-semibold text-[#F77737]">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
               Aceitando perguntas hoje ({questionsLeft}/{profile.daily_limit})
@@ -423,7 +436,8 @@ export default async function PerfilPage({
           minPrice={profile.min_price}
           avatarUrl={avatarUrl}
           displayName={displayName}
-          disabled={questionsLeft === 0}
+          disabled={creatorIsPaused || questionsLeft === 0}
+          disabledReason={creatorIsPaused ? 'paused' : 'limit'}
           fastAskSuggestions={profile.fast_ask_suggestions}
           isAuthenticated={!!currentUserProfile}
           userProfile={currentUserProfile}

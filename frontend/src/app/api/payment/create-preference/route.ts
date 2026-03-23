@@ -61,12 +61,17 @@ export async function POST(request: Request) {
     // Buscar o perfil do criador pelo username
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, username, min_price, daily_limit')
+      .select('id, username, min_price, daily_limit, is_paused, paused_until')
       .eq('username', username)
       .single()
 
     if (profileError || !profile) {
       return NextResponse.json({ error: 'Criador não encontrado' }, { status: 404 })
+    }
+
+    // Verificar se o criador pausou o recebimento de perguntas
+    if (profile.is_paused && (!profile.paused_until || new Date(profile.paused_until) > new Date())) {
+      return NextResponse.json({ error: 'Este criador pausou o recebimento de perguntas temporariamente' }, { status: 422 })
     }
 
     // Validar limite diário via função SQL atômica (evita race condition)
