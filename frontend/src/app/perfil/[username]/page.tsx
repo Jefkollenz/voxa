@@ -236,10 +236,10 @@ export default async function PerfilPage({
             }
             answersContent={
               <>
-                <AnswerFeed publicAnswers={DEMO_ANSWERS} avatarUrl={avatarUrl} displayName={displayName} />
-                <div className="px-4 pb-6">
+                <div className="px-4 pt-4">
                   <TopSupporters supporters={DEMO_SUPPORTERS} inline />
                 </div>
+                <AnswerFeed publicAnswers={DEMO_ANSWERS} avatarUrl={avatarUrl} displayName={displayName} />
               </>
             }
           />
@@ -475,6 +475,9 @@ export default async function PerfilPage({
           }
           answersContent={
             <>
+              <div className="px-4 pt-4">
+                <TopSupporters supporters={(topSupporters as SupporterRow[]) ?? []} inline />
+              </div>
               {publicAnswers && publicAnswers.length > 0 ? (
                 <AnswerFeed publicAnswers={publicAnswers} avatarUrl={avatarUrl} displayName={displayName} highlightId={highlightQuestionId ?? undefined} isVerified={!!profile.is_verified} isFounder={!!profile.is_founder} />
               ) : (
@@ -482,9 +485,6 @@ export default async function PerfilPage({
                   <p className="text-[#6B7280] text-sm">Ainda não há respostas públicas.</p>
                 </div>
               )}
-              <div className="px-4 pb-6">
-                <TopSupporters supporters={(topSupporters as SupporterRow[]) ?? []} inline />
-              </div>
             </>
           }
         />
