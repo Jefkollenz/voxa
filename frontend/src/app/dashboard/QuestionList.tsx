@@ -268,21 +268,31 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
         scale: 3,
         backgroundColor: null,
       } as any)
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          alert('Erro ao gerar imagem.')
-          return
-        }
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'voxa-story.png'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(url)
-      }, 'image/png')
-    } catch {
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/png')
+      )
+      if (!blob) { alert('Erro ao gerar imagem.'); return }
+
+      const file = new File([blob], 'voxa-story.png', { type: 'image/png' })
+
+      // Mobile: usa Web Share API para salvar/compartilhar nativamente
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] })
+        return
+      }
+
+      // Desktop fallback: download direto
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'voxa-story.png'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      // Usuário cancelou o share — não é erro
+      if (err?.name === 'AbortError') return
       alert('Não foi possível gerar a imagem.')
     }
   }
