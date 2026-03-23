@@ -614,19 +614,19 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
               className="w-[320px] max-w-full rounded-2xl overflow-hidden shadow-2xl"
               style={{ border: '3px solid #4C1D95' }}
             >
-              {/* Parte superior — preta com pergunta */}
-              <div className="bg-black px-6 pt-6 pb-5">
-                <p className="text-white font-extrabold text-lg leading-snug">
+              {/* Parte superior — branca com a pergunta do fã */}
+              <div className="bg-white px-6 pt-6 pb-5">
+                <p className="text-gray-900 font-extrabold text-lg leading-snug">
                   {selectedStory.content}
                 </p>
-                <p className="text-gray-400 text-xs mt-3 font-medium">
-                  askvoxa.com/{creatorUsername}
-                </p>
               </div>
-              {/* Parte inferior — branca placeholder */}
-              <div className="bg-white px-6 py-5">
-                <p className="text-gray-400 font-bold text-base">
-                  digite algo...
+              {/* Parte inferior — preta com CTA */}
+              <div className="bg-black px-6 py-5">
+                <p className="text-white font-bold text-sm leading-snug">
+                  Faça uma pergunta sob demanda em:
+                </p>
+                <p className="text-gray-400 text-xs mt-1 font-medium">
+                  askvoxa.com/{creatorUsername}
                 </p>
               </div>
             </div>
