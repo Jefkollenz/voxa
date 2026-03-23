@@ -41,6 +41,8 @@ type ProfileData = {
   daily_limit: number
   questions_answered_today: number
   account_type: string
+  approval_status: string | null
+  rejection_reason: string | null
 }
 
 export default function DashboardPage() {
@@ -70,7 +72,7 @@ export default function DashboardPage() {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, username, min_price, daily_limit, questions_answered_today, account_type')
+        .select('id, username, min_price, daily_limit, questions_answered_today, account_type, approval_status, rejection_reason')
         .eq('id', user.id)
         .single()
 
@@ -163,8 +165,60 @@ export default function DashboardPage() {
   const sentPending = sentQuestions.filter(q => q.status === 'pending').length
   const totalSpent = sentQuestions.reduce((sum, q) => sum + Number(q.price_paid), 0)
 
+  const isFan = profile.account_type === 'fan'
+  const isPendingReview = profile.approval_status === 'pending_review'
+  const isRejected = profile.approval_status === 'rejected'
+
   return (
     <main className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full">
+
+      {/* Banner: perfil em análise */}
+      {isPendingReview && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-2xl">
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-yellow-800">Seu perfil está em análise</p>
+              <p className="text-sm text-yellow-700 mt-1">Nossa equipe está verificando seus dados. Assim que aprovado, seu perfil ficará disponível para receber perguntas.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner: perfil rejeitado */}
+      {isRejected && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-red-800">Seu perfil não foi aprovado</p>
+              {profile.rejection_reason && (
+                <p className="text-sm text-red-700 mt-1">Motivo: {profile.rejection_reason}</p>
+              )}
+              <a
+                href="/setup/creator"
+                className="inline-block mt-2 text-sm font-semibold text-red-600 hover:text-red-800 transition-colors"
+              >
+                Corrigir e reenviar →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CTA: Quero ser criador (apenas para fans) */}
+      {isFan && (
+        <div className="bg-gradient-to-br from-[#DD2A7B]/10 via-[#4C1D95]/10 to-transparent border border-[#DD2A7B]/20 rounded-2xl p-6">
+          <h2 className="font-bold text-lg text-gray-800 mb-1">Quer ganhar dinheiro respondendo perguntas?</h2>
+          <p className="text-sm text-gray-500 mb-4">Crie seu perfil de criador e comece a monetizar sua audiência na VOXA.</p>
+          <a
+            href="/setup/creator"
+            className="inline-flex items-center justify-center w-full min-h-[44px] bg-gradient-instagram text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity"
+          >
+            Quero ser criador
+          </a>
+        </div>
+      )}
 
       {showCreatorView ? (
         <>

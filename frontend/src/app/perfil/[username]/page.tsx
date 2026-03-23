@@ -266,7 +266,7 @@ export default async function PerfilPage({
 
   const { data: profileRaw } = await supabase
     .from('profiles')
-    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, is_founder, is_paused, paused_until, fast_ask_suggestions, creator_setup_completed, account_type')
+    .select('id, username, bio, avatar_url, min_price, daily_limit, questions_answered_today, is_active, is_verified, is_founder, is_paused, paused_until, fast_ask_suggestions, creator_setup_completed, account_type, approval_status')
     .eq('username', params.username)
     .single()
 
@@ -287,6 +287,27 @@ export default async function PerfilPage({
           <p className="text-[#9CA3AF] text-sm mb-4">Este perfil está sendo configurado.</p>
           <div className="inline-flex items-center gap-2 bg-[#DD2A7B]/10 border border-[#DD2A7B]/20 px-4 py-2 rounded-full text-sm font-semibold text-[#DD2A7B]">
             Em breve
+          </div>
+          <a href="/" className="block mt-8 text-sm text-[#6B7280] hover:text-white transition-colors">
+            ← Voltar para a página inicial
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  // Perfil aguardando aprovação ou rejeitado — não exibir publicamente
+  const approvalStatus = (profileRaw as any).approval_status as string | null
+  if (approvalStatus === 'pending_review' || approvalStatus === 'rejected') {
+    const avatarUrl = profile.avatar_url ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.username}`
+    return (
+      <div className="min-h-screen bg-[#0A0A0F] text-white flex flex-col items-center justify-center py-12 px-4">
+        <div className="text-center">
+          <img className="w-24 h-24 rounded-full border-4 border-white/10 object-cover mx-auto mb-6" src={avatarUrl} alt={`@${profile.username}`} />
+          <h1 className="text-2xl font-bold text-white mb-2">@{profile.username}</h1>
+          <p className="text-[#9CA3AF] text-sm mb-4">Este perfil está em análise pela nossa equipe.</p>
+          <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-2 rounded-full text-sm font-semibold text-yellow-400">
+            Em análise
           </div>
           <a href="/" className="block mt-8 text-sm text-[#6B7280] hover:text-white transition-colors">
             ← Voltar para a página inicial

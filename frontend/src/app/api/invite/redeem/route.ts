@@ -76,7 +76,7 @@ export async function POST(request: Request) {
   // Promover usuário a influencer (via service_role, bypassa o trigger)
   const { error: promoteError } = await supabaseAdmin
     .from('profiles')
-    .update({ account_type: 'influencer', creator_setup_completed: false })
+    .update({ account_type: 'influencer', creator_setup_completed: false, approval_status: 'approved' })
     .eq('id', user.id)
 
   if (promoteError) {

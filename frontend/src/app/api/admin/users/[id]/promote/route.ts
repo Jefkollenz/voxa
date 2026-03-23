@@ -31,6 +31,7 @@ export async function PATCH(
     .update({
       account_type: 'influencer',
       creator_setup_completed: true,
+      approval_status: 'approved',
     })
     .eq('id', params.id)
     .eq('account_type', 'fan')

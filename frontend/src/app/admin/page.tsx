@@ -40,6 +40,7 @@ export default async function AdminPage() {
     { count: bannedCreators },
     { count: refundQueueCount },
     { count: pendingReportsCount },
+    { count: pendingApprovalsCount },
     { data: creators },
   ] = await Promise.all([
     supabaseAdmin.from('transactions').select('amount, processing_fee, platform_fee, creator_net').eq('status', 'approved'),
@@ -53,6 +54,7 @@ export default async function AdminPage() {
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
     supabaseAdmin.from('refund_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabaseAdmin.from('question_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending_review'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('approval_status', 'pending_review'),
     supabaseAdmin
       .from('profiles')
       .select('id, username, avatar_url, is_active, questions_answered_today, account_type')
@@ -121,11 +123,16 @@ export default async function AdminPage() {
 
       {/* Row 3: Operational */}
       <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Saúde Operacional</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-10">
         <MetricCard label="Fila de Reembolsos" value={String(refundQueueCount ?? 0)} sub="Aguardando processamento" />
         <MetricCard label="Perguntas Expiradas" value={String(expiredCount ?? 0)} sub={`Sem resposta em ${platformSettings.response_deadline_hours}h`} />
         <MetricCard label="Denúncias Pendentes" value={String(pendingReportsCount ?? 0)} sub="Aguardando moderação" />
         <MetricCard label="Usuários Banidos" value={String(bannedCreators ?? 0)} sub={`de ${totalUsers ?? 0} total`} />
+        <Link href="/admin/approvals" className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:border-[#DD2A7B]/30 transition-colors">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Aprovações Pendentes</p>
+          <p className={`text-2xl font-bold ${(pendingApprovalsCount ?? 0) > 0 ? 'text-[#DD2A7B]' : 'text-gray-900'}`}>{String(pendingApprovalsCount ?? 0)}</p>
+          <p className="text-xs text-[#DD2A7B] font-medium mt-1">Gerenciar →</p>
+        </Link>
       </div>
 
       {/* Creators table */}

@@ -70,15 +70,13 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
 
-    // /setup/creator: só influencer/admin com setup pendente
+    // /setup/creator: precisa ter perfil e não ter setup completo
+    // Fans podem acessar para solicitar virar criador (cadastro aberto com aprovação)
     if (pathname === '/setup/creator' || pathname.startsWith('/setup/creator')) {
       if (!profile) {
         return NextResponse.redirect(new URL('/setup', request.url))
       }
-      if (profile.account_type === 'fan') {
-        return NextResponse.redirect(new URL('/dashboard', request.url))
-      }
-      if (profile.creator_setup_completed) {
+      if ((profile.account_type === 'influencer' || profile.account_type === 'admin') && profile.creator_setup_completed) {
         return NextResponse.redirect(new URL('/dashboard', request.url))
       }
     }

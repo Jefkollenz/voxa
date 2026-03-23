@@ -626,7 +626,7 @@ WHERE id IN (
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS paused_until TIMESTAMPTZ;
 
--- Atualizar can_accept_question() para checar pausa
+-- Atualizar can_accept_question() para checar pausa + aprovação
 CREATE OR REPLACE FUNCTION can_accept_question(p_creator_id UUID)
 RETURNS boolean AS $$
 DECLARE
@@ -635,10 +635,16 @@ DECLARE
   v_pending_intents integer;
   v_is_paused boolean;
   v_paused_until timestamptz;
+  v_approval_status text;
 BEGIN
-  SELECT daily_limit, questions_answered_today, is_paused, paused_until
-    INTO v_daily_limit, v_answered_today, v_is_paused, v_paused_until
+  SELECT daily_limit, questions_answered_today, is_paused, paused_until, approval_status
+    INTO v_daily_limit, v_answered_today, v_is_paused, v_paused_until, v_approval_status
     FROM profiles WHERE id = p_creator_id FOR UPDATE;
+
+  -- Criador precisa estar aprovado (NULL = legado, tratado como aprovado)
+  IF v_approval_status IS NOT NULL AND v_approval_status != 'approved' THEN
+    RETURN FALSE;
+  END IF;
 
   -- Se está pausado e a pausa ainda não expirou, rejeita
   IF v_is_paused = TRUE THEN
@@ -654,3 +660,84 @@ BEGIN
   RETURN (v_answered_today + v_pending_intents) < v_daily_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- ONBOARDING REDESIGN: NICHOS + APROVAÇÃO
+-- ============================================================
+
+-- Novas colunas no profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS social_link TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS accepted_terms_at TIMESTAMPTZ;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS approval_status TEXT CHECK (approval_status IN ('pending_review', 'approved', 'rejected'));
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS approval_reviewed_by UUID REFERENCES profiles(id);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS approval_reviewed_at TIMESTAMPTZ;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
+-- Tabela de nichos (categorias pré-definidas)
+CREATE TABLE IF NOT EXISTS niches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL
+);
+
+-- Relação N:N entre criadores e nichos (máx 3 por criador)
+CREATE TABLE IF NOT EXISTS creator_niches (
+    creator_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    niche_id UUID NOT NULL REFERENCES niches(id) ON DELETE CASCADE,
+    PRIMARY KEY (creator_id, niche_id)
+);
+
+ALTER TABLE creator_niches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Nichos de criador são públicos" ON creator_niches FOR SELECT USING (true);
+CREATE POLICY "Criador gerencia seus nichos" ON creator_niches FOR INSERT WITH CHECK (auth.uid() = creator_id);
+CREATE POLICY "Criador remove seus nichos" ON creator_niches FOR DELETE USING (auth.uid() = creator_id);
+
+ALTER TABLE niches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Nichos são públicos" ON niches FOR SELECT USING (true);
+
+-- Seed de nichos
+INSERT INTO niches (slug, label) VALUES
+  ('fitness', 'Fitness'),
+  ('financas', 'Finanças'),
+  ('tecnologia', 'Tecnologia'),
+  ('beleza', 'Beleza'),
+  ('musica', 'Música'),
+  ('games', 'Games'),
+  ('educacao', 'Educação'),
+  ('humor', 'Humor'),
+  ('lifestyle', 'Lifestyle'),
+  ('saude', 'Saúde'),
+  ('negocios', 'Negócios'),
+  ('culinaria', 'Culinária'),
+  ('moda', 'Moda'),
+  ('outros', 'Outros')
+ON CONFLICT (slug) DO NOTHING;
+
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_profiles_approval_status ON profiles(approval_status);
+CREATE INDEX IF NOT EXISTS idx_creator_niches_creator ON creator_niches(creator_id);
+
+-- Proteger approval_status contra alteração via client
+CREATE OR REPLACE FUNCTION protect_profile_admin_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF current_setting('role', true) != 'service_role' THEN
+    IF NEW.account_type IS DISTINCT FROM OLD.account_type THEN
+      RAISE EXCEPTION 'Não é permitido alterar account_type diretamente';
+    END IF;
+    IF NEW.is_admin IS DISTINCT FROM OLD.is_admin THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_admin diretamente';
+    END IF;
+    IF NEW.is_verified IS DISTINCT FROM OLD.is_verified THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_verified diretamente';
+    END IF;
+    IF NEW.is_founder IS DISTINCT FROM OLD.is_founder THEN
+      RAISE EXCEPTION 'Não é permitido alterar is_founder diretamente';
+    END IF;
+    IF NEW.approval_status IS DISTINCT FROM OLD.approval_status THEN
+      RAISE EXCEPTION 'Não é permitido alterar approval_status diretamente';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;

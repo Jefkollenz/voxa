@@ -61,12 +61,17 @@ export async function POST(request: Request) {
     // Buscar o perfil do criador pelo username
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, username, min_price, daily_limit, is_paused, paused_until')
+      .select('id, username, min_price, daily_limit, is_paused, paused_until, approval_status')
       .eq('username', username)
       .single()
 
     if (profileError || !profile) {
       return NextResponse.json({ error: 'Criador não encontrado' }, { status: 404 })
+    }
+
+    // Verificar se o criador está aprovado (NULL = legado, tratado como aprovado)
+    if (profile.approval_status && profile.approval_status !== 'approved') {
+      return NextResponse.json({ error: 'Este criador ainda não foi aprovado na plataforma' }, { status: 422 })
     }
 
     // Verificar se o criador pausou o recebimento de perguntas
