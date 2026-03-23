@@ -276,12 +276,12 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
         const url = URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        link.download = 'voxa-story.jpg'
+        link.download = 'voxa-story.png'
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
         URL.revokeObjectURL(url)
-      }, 'image/jpeg', 0.95)
+      }, 'image/png')
     } catch {
       alert('Não foi possível gerar a imagem.')
     }
@@ -608,29 +608,26 @@ export default function QuestionList({ questions: initial, creatorUsername, crea
               </button>
             </div>
 
-            {/* Story 9:16 — fundo transparente, só a caixinha centralizada */}
+            {/* Caixinha — só o card, sem fundo (figurinha) */}
             <div
               ref={storyRef}
-              className="w-[360px] max-w-full aspect-[9/16] flex items-center justify-center relative"
-              style={{ backgroundColor: '#1a1a2e' }}
+              className="w-[320px] max-w-full rounded-2xl overflow-hidden shadow-2xl"
+              style={{ border: '3px solid #4C1D95' }}
             >
-              {/* Caixinha estilo Instagram */}
-              <div className="w-[85%] rounded-2xl overflow-hidden shadow-2xl" style={{ border: '3px solid #4C1D95' }}>
-                {/* Parte superior — preta com pergunta */}
-                <div className="bg-black px-6 pt-6 pb-5">
-                  <p className="text-white font-extrabold text-lg leading-snug">
-                    {selectedStory.content}
-                  </p>
-                  <p className="text-gray-400 text-xs mt-3 font-medium">
-                    askvoxa.com/{creatorUsername}
-                  </p>
-                </div>
-                {/* Parte inferior — branca placeholder */}
-                <div className="bg-white px-6 py-5">
-                  <p className="text-gray-400 font-bold text-base">
-                    digite algo...
-                  </p>
-                </div>
+              {/* Parte superior — preta com pergunta */}
+              <div className="bg-black px-6 pt-6 pb-5">
+                <p className="text-white font-extrabold text-lg leading-snug">
+                  {selectedStory.content}
+                </p>
+                <p className="text-gray-400 text-xs mt-3 font-medium">
+                  askvoxa.com/{creatorUsername}
+                </p>
+              </div>
+              {/* Parte inferior — branca placeholder */}
+              <div className="bg-white px-6 py-5">
+                <p className="text-gray-400 font-bold text-base">
+                  digite algo...
+                </p>
               </div>
             </div>
           </div>
