@@ -35,11 +35,9 @@ frontend/tsconfig.tsbuildinfo
 # Prisma (gerado automaticamente)
 frontend/node_modules/.prisma/
 
-# Documentos internos de planejamento
-plans/
+# Pastas geradas localmente que não sobem para Source Control
 .agent/
 .claude/
-docs/
 
 # Playwright — artefatos de teste gerados automaticamente
 frontend/test-results/
