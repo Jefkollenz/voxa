@@ -28,6 +28,7 @@ Com o objetivo de manter fluência e facilitar leituras em alto nível (*Progres
 - [**Arquitetura & Design** (`docs/architecture.md`)](docs/architecture.md) => Stack, Mobile vs Web, Dark mode premium constraints e regras centrais de Frontend.
 - [**Database Supremo** (`docs/database.md`)](docs/database.md) => Modelagem de perfis, interações centrais (Questions/Payments), regras herméticas RLS e Triggers.
 - [**Webhooks & Cron Jobs** (`docs/workflows.md`)](docs/workflows.md) => Entendendo os limites sensíveis e irreversíveis da API MP, estornos passivos assíncronos e proteção contra sobreposição (overselling).
+- [**Testabilidade & QA** (`docs/testing_strategy.md`)](docs/testing_strategy.md) => Lógica de testes via `pgTAP` e simulação da pipeline de E2E do Mercado Pago localmente.
 
 > **Atenção (Importante):** Verifique essas sub-rotas nos documentos sempre que mexer na fundação destas funcionalidades. O arquivo `CLAUDE.md` aglutina regras basilares de convenção para contribuidores autônomos/IAs.
 
