@@ -18,7 +18,7 @@ export default async function AdminCreatorsPage() {
   const { data: creators } = await supabaseAdmin
     .from('profiles')
     .select('id, username, avatar_url, is_active, is_verified, questions_answered_today, min_price, created_at')
-    .eq('account_type', 'influencer')
+    .in('account_type', ['influencer', 'admin'])
     .order('created_at', { ascending: false })
 
   return (

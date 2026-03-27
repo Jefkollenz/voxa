@@ -18,7 +18,6 @@ function SetupContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [userId, setUserId] = useState<string | null>(null)
-  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null)
   const [username, setUsername] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -33,8 +32,6 @@ function SetupContent() {
         router.push('/login')
       } else {
         setUserId(user.id)
-        // Usar foto do Google como fallback
-        setUserPhotoUrl(user.user_metadata?.avatar_url || null)
       }
     })
   }, [router])
@@ -92,7 +89,7 @@ function SetupContent() {
     const supabase = createClient()
 
     // Upload avatar se selecionado
-    let avatarUrl: string | null = userPhotoUrl || null
+    let avatarUrl: string | null = null
     if (avatarFile) {
       const path = `${userId}/${Date.now()}.jpg`
       const { data, error: uploadError } = await supabase.storage
@@ -183,7 +180,7 @@ function SetupContent() {
   }
 
   const hint = usernameHint()
-  const displayAvatar = avatarPreview || userPhotoUrl
+  const displayAvatar = avatarPreview
 
   return (
     <div className="w-full max-w-md bg-[#111] rounded-[32px] border border-white/10 p-8 shadow-2xl relative z-10">

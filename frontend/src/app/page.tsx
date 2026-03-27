@@ -9,11 +9,10 @@ export default async function HomePage() {
   const { data: creators } = await supabase
     .from('profiles')
     .select('username, bio, avatar_url, min_price, is_founder')
-    .in('username', ['luciane', 'henrique', 'jefersonkollenz'])
+    .in('username', ['henrique', 'jefersonkollenz'])
 
   const creatorMap = new Map(creators?.map(c => [c.username, c]) ?? [])
   const creatorsList = [
-    creatorMap.get('luciane') || { username: 'luciane', bio: 'Criador na VOXA', min_price: 15, avatar_url: null, is_founder: false },
     creatorMap.get('henrique') || { username: 'henrique', bio: 'CEO & Founder of VOXA', min_price: 10, avatar_url: null, is_founder: false },
     creatorMap.get('jefersonkollenz') || { username: 'jefersonkollenz', bio: 'Pra quem tem pensamento forte...', min_price: 10, avatar_url: null, is_founder: false },
   ]

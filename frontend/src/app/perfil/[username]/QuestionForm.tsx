@@ -102,6 +102,13 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
         if (data.isAnonymous !== undefined) setIsAnonymous(data.isAnonymous)
         if (data.isShareable !== undefined) setIsShareable(data.isShareable)
         sessionStorage.removeItem(storageKey)
+        
+        if (data.autoSubmit) {
+          setTimeout(() => {
+            const btn = document.getElementById('submit-question-btn')
+            if (btn) btn.click()
+          }, 500)
+        }
       } catch {
         sessionStorage.removeItem(storageKey)
       }
@@ -148,10 +155,10 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
     }
   }
 
-  const saveFormToSession = () => {
+  const saveFormToSession = (autoSubmit = false) => {
     const storageKey = `voxa_pending_question_${username}`
     sessionStorage.setItem(storageKey, JSON.stringify({
-      question, supportMessage, mode, serviceType, amount, supportAmount, isAnonymous, isShareable,
+      question, supportMessage, mode, serviceType, amount, supportAmount, isAnonymous, isShareable, autoSubmit
     }))
   }
 
@@ -182,7 +189,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
 
     // Se não autenticado: salvar dados e mostrar modal de login
     if (!isAuthenticated) {
-      saveFormToSession()
+      saveFormToSession(true)
       trackLoginPromptShown(username, isSupport ? 'support' : 'question', finalAmount)
       setShowLoginModal(true)
       return
@@ -579,6 +586,7 @@ export default function QuestionForm({ username, minPrice, displayName, disabled
         {error && <p className="text-sm text-red-400 -mt-2" role="alert">{error}</p>}
 
         <button
+          id="submit-question-btn"
           type="button"
           onClick={handleSubmit}
           disabled={isSubmitting}

@@ -49,7 +49,7 @@ export default async function AdminPage() {
     supabaseAdmin.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'answered'),
     supabaseAdmin.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'expired'),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }),
-    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_type', 'influencer'),
+    supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).in('account_type', ['influencer', 'admin']),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('account_type', 'fan'),
     supabaseAdmin.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', false),
     supabaseAdmin.from('refund_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -58,7 +58,7 @@ export default async function AdminPage() {
     supabaseAdmin
       .from('profiles')
       .select('id, username, avatar_url, is_active, questions_answered_today, account_type')
-      .eq('account_type', 'influencer')
+      .in('account_type', ['influencer', 'admin'])
       .order('questions_answered_today', { ascending: false })
       .limit(20),
   ])

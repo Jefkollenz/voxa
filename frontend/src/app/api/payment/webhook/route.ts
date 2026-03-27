@@ -67,12 +67,8 @@ export async function POST(request: Request) {
 
     const signatureResult = verifyMPSignature(xSignature, xRequestId, dataId)
     if (signatureResult === null) {
-      // MP_WEBHOOK_SECRET não configurado — erro de servidor, não de assinatura
-      // Retornar 500 para que o MP retente e o pagamento não seja perdido silenciosamente
-      console.error('[webhook] CRÍTICO: MP_WEBHOOK_SECRET não configurado — todos os webhooks serão rejeitados até que seja configurado')
-      return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 })
-    }
-    if (!signatureResult) {
+      console.warn('[webhook] AVISO: MP_WEBHOOK_SECRET não configurado. Validando webhook apenas pela API do Mercado Pago.')
+    } else if (!signatureResult) {
       console.error('[webhook] Assinatura inválida — request rejeitado')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
