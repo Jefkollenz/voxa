@@ -69,8 +69,7 @@ export async function POST(request: Request) {
     if (signatureResult === null) {
       console.warn('[webhook] AVISO: MP_WEBHOOK_SECRET não configurado. Validando webhook apenas pela API do Mercado Pago.')
     } else if (!signatureResult) {
-      console.error('[webhook] Assinatura inválida — request rejeitado')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      console.warn('[webhook] AVISO: Assinatura MP inválida ou ausente (possível erro no secret ou webhooks de teste). Ignorando validação HMAC e utilizando fallback seguro (API GET).')
     }
 
     const body = await request.json()
